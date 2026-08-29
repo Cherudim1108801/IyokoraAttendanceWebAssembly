@@ -1,0 +1,334 @@
+@page "/practice/{PracticeId}"
+@inject PracticeService PracticeService
+@inject MemberService MemberService
+@inject AttendanceService AttendanceService
+@inject PieceService PieceService
+@inject LocalProfileStore Profile
+@inject IJSRuntime JS
+
+<div class="page-pad">
+
+    @if (_practice is not null)
+    {
+        <div class="section">
+            <h2 style="font-size:24px;font-weight:bold;margin:0;">@_practice.Date.ToString("yyyy年M月d日(ddd)")</h2>
+            @if (!string.IsNullOrEmpty(_practice.Title))
+            {
+                <p style="margin:4px 0;">@_practice.Title</p>
+            }
+            @if (!string.IsNullOrEmpty(_practice.Place))
+            {
+                <p class="hint-text">📍 @_practice.Place</p>
+            }
+            @if (!string.IsNullOrEmpty(_practice.PiecesSummary))
+            {
+                <p class="hint-text">🎵 @_practice.PiecesSummary</p>
+            }
+            <p>参加予定: @_totalAttending / @_totalMembers 人</p>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(_errorMessage))
+    {
+        <p class="error-text">@_errorMessage</p>
+    }
+
+    @if (_practice is not null)
+    {
+        <div class="section">
+            <h3 class="section-title">あなたの出欠</h3>
+            @if (!_isAttendanceEditable)
+            {
+                <p class="hint-text">過去の練習のため、出欠は変更できません。</p>
+            }
+            <AttendanceButtons Status="_myStatus" Disabled="!_isAttendanceEditable" StatusChanged="SetMyStatusAsync" />
+        </div>
+
+        <PartSummaryPanel Summaries="_partSummaries" Title="パート別 参加人数" />
+
+        @if (_songParticipations.Count > 0)
+        {
+            <div class="section">
+                <h3 class="section-title">曲ごとの参加人数</h3>
+                <p class="hint-text">○の色はパート、「上」「下」は曲内の分割担当を表します</p>
+
+                @foreach (var song in _songParticipations)
+                {
+                    <div style="margin-bottom:16px;">
+                        <p style="font-weight:bold;font-size:14px;margin:0 0 6px;">@song.Title</p>
+                        <div class="dot-wrap">
+                            @foreach (var dot in song.Dots)
+                            {
+                                <div class="dot" style="background-color:@dot.ColorHex;margin:@dot.Margin;">@dot.SubLabel</div>
+                            }
+                        </div>
+                        <div style="display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap;">
+                            @if (song.IsFeatured)
+                            {
+                                <span class="badge-star">★</span>
+                            }
+                            @if (song.HasRecordingUrl)
+                            {
+                                <a href="@song.RecordingUrl" target="_blank" rel="noopener noreferrer" style="font-size:13px;color:#512BD4;">🎵 録音を聴く</a>
+                            }
+                            else
+                            {
+                                <span class="hint-text" style="margin:0;">録音リンク未登録</span>
+                            }
+
+                            @if (Profile.Role == Role.Admin)
+                            {
+                                <span style="flex:1;"></span>
+                                @if (song.CanToggleFeaturedOn)
+                                {
+                                    <button class="iyk-btn-text" @onclick="() => ToggleRecordingFeaturedAsync(song)">★ 注目に設定</button>
+                                }
+                                @if (song.CanToggleFeaturedOff)
+                                {
+                                    <button class="iyk-btn-text-star" @onclick="() => ToggleRecordingFeaturedAsync(song)">★ 注目解除</button>
+                                }
+                                <button class="iyk-btn-text" @onclick="() => EditRecordingAsync(song)">編集</button>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+
+        @if (Profile.Role == Role.Admin)
+        {
+            <div class="section">
+                <h3 class="section-title">鍵の受け取り状況</h3>
+                @if (!_practice.RequiresKeyPickup)
+                {
+                    <p class="hint-text">この練習では鍵の受け取りは不要です。</p>
+                }
+                else
+                {
+                    <div style="display:flex;align-items:center;justify-content:space-between;">
+                        @if (_practice.KeyPickedUp)
+                        {
+                            <span style="color:#3EC1A4;font-weight:bold;">受け取り済み</span>
+                            <button class="iyk-btn-text" @onclick="ToggleKeyPickedUpAsync">未受け取りに戻す</button>
+                        }
+                        else
+                        {
+                            <span style="color:#D600AA;font-weight:bold;">未受け取り</span>
+                            <button class="iyk-btn-text-primary" @onclick="ToggleKeyPickedUpAsync">受け取り済みにする</button>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    }
+    else if (_isBusy)
+    {
+        <p class="hint-text">読み込み中...</p>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public string PracticeId { get; set; } = string.Empty;
+
+    private Practice? _practice;
+    private AttendanceStatus _myStatus = AttendanceStatus.Undecided;
+    private int _totalAttending;
+    private int _totalMembers;
+    private bool _isAttendanceEditable = true;
+    private List<PartSummary> _partSummaries = [];
+    private List<SongParticipation> _songParticipations = [];
+    private bool _isBusy;
+    private string? _errorMessage;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        if (string.IsNullOrEmpty(PracticeId))
+            return;
+
+        _isBusy = true;
+        _errorMessage = null;
+        try
+        {
+            _practice = await PracticeService.GetByIdAsync(PracticeId);
+            _isAttendanceEditable = _practice is null || _practice.Date.Date >= DateTime.Today;
+            var members = await MemberService.GetAllAsync();
+            var pieces = await PieceService.GetAllAsync();
+            var attendances = await AttendanceService.GetForPracticeAsync(PracticeId);
+            var statusByMemberId = attendances.ToDictionary(a => a.MemberId, a => a.Status);
+
+            _myStatus = statusByMemberId.GetValueOrDefault(Profile.MemberId, AttendanceStatus.Undecided);
+            _totalMembers = members.Count;
+            _totalAttending = attendances.Count(a => a.Status == AttendanceStatus.Attending);
+
+            var attendingByPart = attendances
+                .Where(a => a.Status == AttendanceStatus.Attending)
+                .GroupBy(a => a.Part)
+                .ToDictionary(g => g.Key, g => g.Count());
+
+            var attendingNamesByPart = attendances
+                .Where(a => a.Status == AttendanceStatus.Attending)
+                .GroupBy(a => a.Part)
+                .ToDictionary(
+                    g => g.Key,
+                    g => (IReadOnlyList<string>)g.Select(a => a.MemberName).OrderBy(n => n, StringComparer.CurrentCultureIgnoreCase).ToList());
+
+            var membersByPart = members.GroupBy(m => m.Part).ToDictionary(g => g.Key, g => g.Count());
+
+            var summaries = new List<PartSummary>();
+            foreach (var part in PartTypeExtensions.All)
+            {
+                summaries.Add(new PartSummary
+                {
+                    Part = part,
+                    Label = part.ToDisplayName(),
+                    ColorHex = part.ToColorHex(),
+                    CardBackgroundColorHex = part.ToCardBackgroundColorHex(),
+                    AttendingCount = attendingByPart.GetValueOrDefault(part),
+                    MemberCount = membersByPart.GetValueOrDefault(part),
+                    AttendeeNames = attendingNamesByPart.GetValueOrDefault(part) ?? []
+                });
+            }
+            _partSummaries = summaries;
+
+            var attendingMembers = members
+                .Where(m => statusByMemberId.GetValueOrDefault(m.Id) == AttendanceStatus.Attending)
+                .OrderBy(m => m.Part)
+                .ThenBy(m => m.Name, StringComparer.CurrentCultureIgnoreCase)
+                .ToList();
+
+            var piecesById = pieces.ToDictionary(p => p.Id);
+
+            var songs = new List<SongParticipation>();
+            foreach (var pieceRef in _practice?.Pieces ?? [])
+            {
+                piecesById.TryGetValue(pieceRef.PieceId, out var piece);
+
+                var dots = new List<ParticipationDot>();
+                PartType? previousPart = null;
+                foreach (var member in attendingMembers)
+                {
+                    var assignment = piece?.PartAssignments.FirstOrDefault(a => a.Part == member.Part);
+                    string? subLabel = null;
+                    if (assignment is { Division: PartDivision.UpperLower })
+                    {
+                        var subPart = member.PieceParts.FirstOrDefault(p => p.PieceId == pieceRef.PieceId)?.SubPart;
+                        var labels = assignment.SubPartLabels;
+                        if (subPart == labels[0])
+                            subLabel = "上";
+                        else if (subPart == labels[1])
+                            subLabel = "下";
+                    }
+
+                    dots.Add(new ParticipationDot
+                    {
+                        ColorHex = member.Part.ToCardBackgroundColorHex(),
+                        SubLabel = subLabel,
+                        Margin = previousPart is not null && previousPart != member.Part
+                            ? "4px 4px 4px 14px"
+                            : "4px"
+                    });
+                    previousPart = member.Part;
+                }
+
+                songs.Add(new SongParticipation
+                {
+                    PieceId = pieceRef.PieceId,
+                    Title = pieceRef.Title,
+                    Dots = dots,
+                    RecordingUrl = pieceRef.RecordingUrl,
+                    IsFeatured = pieceRef.IsFeatured
+                });
+            }
+            _songParticipations = songs;
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"読み込みに失敗しました。({ex.Message})";
+        }
+        finally
+        {
+            _isBusy = false;
+        }
+    }
+
+    private async Task SetMyStatusAsync(AttendanceStatus status)
+    {
+        if (_practice is null || !_isAttendanceEditable)
+            return;
+
+        try
+        {
+            await AttendanceService.SetStatusAsync(_practice.Id, Profile.MemberId, Profile.Name, Profile.Part, status);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"更新に失敗しました。({ex.Message})";
+        }
+    }
+
+    private async Task EditRecordingAsync(SongParticipation song)
+    {
+        if (Profile.Role != Role.Admin || _practice is null)
+            return;
+
+        var input = await JS.InvokeAsync<string?>("prompt",
+            $"{song.Title} の録音リンク\nOneDriveの共有リンクを入力してください。空欄で保存するとリンクを削除します。",
+            song.RecordingUrl ?? "");
+
+        if (input is null)
+            return;
+
+        var trimmed = input.Trim();
+        if (trimmed.Length > 0 && !Uri.TryCreate(trimmed, UriKind.Absolute, out _))
+        {
+            _errorMessage = "リンクの形式が正しくありません。";
+            return;
+        }
+
+        try
+        {
+            await PracticeService.SetPieceRecordingUrlAsync(_practice.Id, song.PieceId, trimmed.Length > 0 ? trimmed : null);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"録音リンクの保存に失敗しました。({ex.Message})";
+        }
+    }
+
+    private async Task ToggleRecordingFeaturedAsync(SongParticipation song)
+    {
+        if (Profile.Role != Role.Admin || _practice is null || !song.HasRecordingUrl)
+            return;
+
+        try
+        {
+            await PracticeService.SetPieceRecordingFeaturedAsync(_practice.Id, song.PieceId, !song.IsFeatured);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"更新に失敗しました。({ex.Message})";
+        }
+    }
+
+    private async Task ToggleKeyPickedUpAsync()
+    {
+        if (Profile.Role != Role.Admin || _practice is null)
+            return;
+
+        try
+        {
+            await PracticeService.SetKeyPickedUpAsync(_practice.Id, !_practice.KeyPickedUp);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"更新に失敗しました。({ex.Message})";
+        }
+    }
+}

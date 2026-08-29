@@ -1,0 +1,218 @@
+@page "/profile"
+@inject MemberService MemberService
+@inject PieceService PieceService
+@inject LocalProfileStore ProfileStore
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<div class="page-pad">
+
+    <div class="field">
+        <label>名前</label>
+        <input type="text" placeholder="例：山田 太郎" @bind="_name" @bind:event="oninput" />
+    </div>
+
+    <div class="field">
+        <label>パート</label>
+        <select @bind="_selectedPartValue">
+            @foreach (var option in _partOptions)
+            {
+                <option value="@option.Part">@option.Label</option>
+            }
+        </select>
+    </div>
+
+    <div class="field">
+        <label>役割</label>
+        <p class="hint-text">管理者は曲・練習予定の追加ができます。一般団員は出欠登録のみ行え、その他は閲覧のみです。</p>
+        <select @bind="_selectedRoleValue">
+            @foreach (var option in _roleOptions)
+            {
+                <option value="@option.Role">@option.Label</option>
+            }
+        </select>
+    </div>
+
+    <div class="field">
+        <label>曲ごとのパート担当</label>
+        <p class="hint-text">所属パートに内部分割（上・下など）が設定されている曲のみ表示されます。</p>
+
+        @if (_piecePartInputs.Count == 0)
+        {
+            <p class="hint-text">該当する曲はありません。</p>
+        }
+        else
+        {
+            @foreach (var input in _piecePartInputs)
+            {
+                <div style="display:flex;align-items:center;gap:8px;padding:6px 0;">
+                    <span style="flex:1;">@input.PieceTitle</span>
+                    <select style="width:140px;" @bind="input.SelectedSubPart">
+                        <option value=""></option>
+                        @foreach (var sub in input.SubPartOptions)
+                        {
+                            <option value="@sub">@sub</option>
+                        }
+                    </select>
+                </div>
+            }
+        }
+    </div>
+
+    @if (!string.IsNullOrEmpty(_errorMessage))
+    {
+        <p class="error-text">@_errorMessage</p>
+    }
+    @if (!string.IsNullOrEmpty(_savedMessage))
+    {
+        <p class="success-text">@_savedMessage</p>
+    }
+
+    <button class="iyk-btn iyk-btn-primary iyk-btn-block" style="margin-top:8px;" disabled="@_isBusy" @onclick="SaveAsync">保存</button>
+
+    <hr class="divider" />
+
+    <p class="hint-text">この端末を別の人が使う場合</p>
+    <button class="iyk-btn iyk-btn-outline-danger iyk-btn-block" @onclick="SwitchProfileAsync">別のプロフィールを使う</button>
+
+    @if (_isBusy)
+    {
+        <p class="hint-text" style="margin-top:10px;">処理中...</p>
+    }
+</div>
+
+@code {
+    private readonly List<PartOption> _partOptions = PartOption.All;
+    private readonly List<RoleOption> _roleOptions = RoleOption.All;
+    private List<Piece> _pieces = [];
+    private List<PiecePartSelectionInput> _piecePartInputs = [];
+
+    private string _name = string.Empty;
+    private PartType _selectedPart;
+    private Role _selectedRole;
+    private string? _errorMessage;
+    private string? _savedMessage;
+    private bool _isBusy;
+
+    private PartType _selectedPartValue
+    {
+        get => _selectedPart;
+        set
+        {
+            if (_selectedPart == value)
+                return;
+            _selectedPart = value;
+            BuildPiecePartInputs();
+        }
+    }
+
+    private Role _selectedRoleValue
+    {
+        get => _selectedRole;
+        set => _selectedRole = value;
+    }
+
+    protected override Task OnInitializedAsync()
+    {
+        _name = ProfileStore.Name;
+        _selectedPart = ProfileStore.Part;
+        _selectedRole = ProfileStore.Role;
+        return LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _isBusy = true;
+        _errorMessage = null;
+        try
+        {
+            _pieces = await PieceService.GetAllAsync();
+            BuildPiecePartInputs();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"読み込みに失敗しました。({ex.Message})";
+        }
+        finally
+        {
+            _isBusy = false;
+        }
+    }
+
+    private void BuildPiecePartInputs()
+    {
+        var savedParts = ProfileStore.PieceParts.ToDictionary(p => p.PieceId, p => p.SubPart);
+
+        _piecePartInputs = [];
+        foreach (var piece in _pieces)
+        {
+            var assignment = piece.PartAssignments.FirstOrDefault(a => a.Part == _selectedPart);
+            if (assignment is null || assignment.Division == PartDivision.None)
+                continue;
+
+            _piecePartInputs.Add(new PiecePartSelectionInput
+            {
+                PieceId = piece.Id,
+                PieceTitle = piece.Title,
+                SubPartOptions = [.. assignment.SubPartLabels],
+                SelectedSubPart = savedParts.GetValueOrDefault(piece.Id) ?? string.Empty
+            });
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        var trimmedName = _name.Trim();
+        if (string.IsNullOrEmpty(trimmedName))
+        {
+            _errorMessage = "名前を入力してください。";
+            return;
+        }
+
+        _isBusy = true;
+        _errorMessage = null;
+        _savedMessage = null;
+        try
+        {
+            var pieceParts = _piecePartInputs
+                .Where(p => !string.IsNullOrEmpty(p.SelectedSubPart))
+                .Select(p => new MemberPiecePart { PieceId = p.PieceId, SubPart = p.SelectedSubPart })
+                .ToList();
+
+            ProfileStore.Name = trimmedName;
+            ProfileStore.Part = _selectedPart;
+            ProfileStore.Role = _selectedRole;
+            ProfileStore.PieceParts = pieceParts;
+            await MemberService.SaveAsync(ProfileStore.MemberId, trimmedName, _selectedPart, _selectedRole, pieceParts);
+            _savedMessage = "保存しました。";
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"保存に失敗しました。({ex.Message})";
+        }
+        finally
+        {
+            _isBusy = false;
+        }
+    }
+
+    private async Task SwitchProfileAsync()
+    {
+        var confirmed = await JS.InvokeAsync<bool>("confirm",
+            "この端末に保存されている名前・パートの情報を削除し、最初の登録画面に戻ります。よろしいですか？");
+
+        if (!confirmed)
+            return;
+
+        ProfileStore.Clear();
+        Nav.NavigateTo("onboarding");
+    }
+
+    private class PiecePartSelectionInput
+    {
+        public required string PieceId { get; init; }
+        public required string PieceTitle { get; init; }
+        public required List<string> SubPartOptions { get; init; }
+        public string SelectedSubPart { get; set; } = string.Empty;
+    }
+}

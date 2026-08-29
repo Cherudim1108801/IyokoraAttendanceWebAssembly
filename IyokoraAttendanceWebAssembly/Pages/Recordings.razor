@@ -1,0 +1,105 @@
+@page "/recordings"
+@inject PracticeService PracticeService
+
+<div class="page-pad">
+
+    @if (!string.IsNullOrEmpty(_errorMessage))
+    {
+        <p class="error-text">@_errorMessage</p>
+    }
+
+    @if (_isBusy)
+    {
+        <p class="hint-text">読み込み中...</p>
+    }
+    else if (_hasNoRecordings)
+    {
+        <p class="hint-text">録音データはまだありません。練習詳細画面から曲ごとに録音リンクを登録できます。</p>
+    }
+    else
+    {
+        @if (_featuredRecordings.Count > 0)
+        {
+            <div class="section">
+                <h3 class="section-title">★ 注目の音源</h3>
+                @foreach (var item in _featuredRecordings)
+                {
+                    <a class="list-card clickable" style="background:#FFF6E0;text-decoration:none;color:inherit;" href="@item.RecordingUrl" target="_blank" rel="noopener noreferrer">
+                        <div>
+                            <p class="list-card-title">@item.Title</p>
+                            <p class="list-card-sub">@item.PracticeLabel</p>
+                        </div>
+                    </a>
+                }
+            </div>
+        }
+
+        <div class="section">
+            <h3 class="section-title">すべての録音</h3>
+            @foreach (var item in _allRecordings)
+            {
+                <a class="list-card clickable" style="text-decoration:none;color:inherit;" href="@item.RecordingUrl" target="_blank" rel="noopener noreferrer">
+                    <div>
+                        <p class="list-card-title">
+                            @if (item.IsFeatured)
+                            {
+                                <span class="badge-star">★ </span>
+                            }
+                            @item.Title
+                        </p>
+                        <p class="list-card-sub">@item.PracticeLabel</p>
+                    </div>
+                </a>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<RecordingItem> _featuredRecordings = [];
+    private List<RecordingItem> _allRecordings = [];
+    private bool _hasNoRecordings;
+    private bool _isBusy;
+    private string? _errorMessage;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _isBusy = true;
+        _errorMessage = null;
+        try
+        {
+            var practices = await PracticeService.GetAllAsync();
+
+            var items = practices
+                .OrderByDescending(p => p.Date)
+                .SelectMany(p => p.Pieces
+                    .Where(piece => !string.IsNullOrEmpty(piece.RecordingUrl))
+                    .Select(piece => new RecordingItem
+                    {
+                        PracticeId = p.Id,
+                        PieceId = piece.PieceId,
+                        Title = piece.Title,
+                        PracticeLabel = string.IsNullOrEmpty(p.Title)
+                            ? $"{p.Date:yyyy年M月d日}の練習"
+                            : $"{p.Date:yyyy年M月d日} {p.Title}",
+                        RecordingUrl = piece.RecordingUrl!,
+                        IsFeatured = piece.IsFeatured
+                    }))
+                .ToList();
+
+            _featuredRecordings = items.Where(i => i.IsFeatured).ToList();
+            _allRecordings = items;
+            _hasNoRecordings = _allRecordings.Count == 0;
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"読み込みに失敗しました。({ex.Message})";
+        }
+        finally
+        {
+            _isBusy = false;
+        }
+    }
+}

@@ -1,0 +1,185 @@
+@page "/schedule"
+@inject PracticeService PracticeService
+@inject PieceService PieceService
+@inject LocalProfileStore Profile
+@inject NavigationManager Nav
+
+<div class="page-pad">
+
+    @if (Profile.Role == Role.Admin)
+    {
+        <button class="iyk-btn iyk-btn-primary iyk-btn-block" @onclick="ToggleAddPanel">＋ 練習予定を追加</button>
+    }
+
+    @if (_isAddPanelVisible)
+    {
+        <div class="highlight-card" style="margin-top:10px;">
+            <div class="field">
+                <label>日付</label>
+                <input type="date" @bind="_newDate" @bind:format="yyyy-MM-dd" />
+            </div>
+            <div class="field">
+                <label>タイトル（任意）</label>
+                <input type="text" placeholder="例：定期練習" @bind="_newTitle" @bind:event="oninput" />
+            </div>
+            <div class="field">
+                <label>場所（任意）</label>
+                <input type="text" placeholder="例：市民会館 音楽室" @bind="_newPlace" @bind:event="oninput" />
+            </div>
+
+            <label style="font-weight:bold;">練習する曲（任意）</label>
+            @if (_pieceInputs.Count == 0)
+            {
+                <p class="hint-text">登録されている曲はありません。「曲」タブから登録できます。</p>
+            }
+            else
+            {
+                @foreach (var input in _pieceInputs)
+                {
+                    <div class="checkbox-row">
+                        <input type="checkbox" id="@("piece_" + input.PieceId)" @bind="input.IsSelected" />
+                        <label for="@("piece_" + input.PieceId)">@input.Title</label>
+                    </div>
+                }
+            }
+
+            <div class="checkbox-row" style="margin-top:8px;">
+                <input type="checkbox" id="requiresKey" @bind="_newRequiresKeyPickup" />
+                <label for="requiresKey">鍵の受け取りが必要</label>
+            </div>
+
+            <button class="iyk-btn iyk-btn-primary iyk-btn-block" style="margin-top:8px;" @onclick="AddPracticeAsync">この内容で登録</button>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(_errorMessage))
+    {
+        <p class="error-text">@_errorMessage</p>
+    }
+
+    @if (_isBusy)
+    {
+        <p class="hint-text">読み込み中...</p>
+    }
+    else if (_practices.Count == 0)
+    {
+        <p class="empty-text">登録されている練習予定はありません。</p>
+    }
+    else
+    {
+        @foreach (var practice in _practices)
+        {
+            <div class="list-card clickable" @onclick="() => OpenDetail(practice)">
+                <div>
+                    <p class="list-card-title">@practice.Date.ToString("yyyy年M月d日(ddd)")</p>
+                    @if (!string.IsNullOrEmpty(practice.Title))
+                    {
+                        <p class="list-card-sub">@practice.Title</p>
+                    }
+                    @if (!string.IsNullOrEmpty(practice.Place))
+                    {
+                        <p class="list-card-sub">📍 @practice.Place</p>
+                    }
+                    @if (!string.IsNullOrEmpty(practice.PiecesSummary))
+                    {
+                        <p class="list-card-sub">🎵 @practice.PiecesSummary</p>
+                    }
+                </div>
+                @if (Profile.Role == Role.Admin)
+                {
+                    <button class="iyk-btn-text-danger" @onclick="() => DeletePracticeAsync(practice)" @onclick:stopPropagation="true">削除</button>
+                }
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private List<Practice> _practices = [];
+    private List<PieceSelectionInput> _pieceInputs = [];
+    private bool _isAddPanelVisible;
+    private DateTime _newDate = DateTime.Today.AddDays(7);
+    private string _newTitle = string.Empty;
+    private string _newPlace = string.Empty;
+    private bool _newRequiresKeyPickup;
+    private bool _isBusy;
+    private string? _errorMessage;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _isBusy = true;
+        _errorMessage = null;
+        try
+        {
+            _practices = await PracticeService.GetUpcomingAsync();
+
+            var pieces = await PieceService.GetAllAsync();
+            _pieceInputs = pieces.Select(p => new PieceSelectionInput { PieceId = p.Id, Title = p.Title }).ToList();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"読み込みに失敗しました。({ex.Message})";
+        }
+        finally
+        {
+            _isBusy = false;
+        }
+    }
+
+    private void ToggleAddPanel() => _isAddPanelVisible = !_isAddPanelVisible;
+
+    private async Task AddPracticeAsync()
+    {
+        if (Profile.Role != Role.Admin)
+            return;
+
+        _errorMessage = null;
+        try
+        {
+            var date = _newDate;
+            var selectedPieces = _pieceInputs
+                .Where(p => p.IsSelected)
+                .Select(p => new PracticePieceRef { PieceId = p.PieceId, Title = p.Title })
+                .ToList();
+
+            await PracticeService.CreateAsync(date, _newTitle.Trim(), _newPlace.Trim(), selectedPieces, _newRequiresKeyPickup);
+            _newTitle = string.Empty;
+            _newPlace = string.Empty;
+            _newDate = DateTime.Today.AddDays(7);
+            _newRequiresKeyPickup = false;
+            _isAddPanelVisible = false;
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"予定の追加に失敗しました。({ex.Message})";
+        }
+    }
+
+    private async Task DeletePracticeAsync(Practice practice)
+    {
+        if (Profile.Role != Role.Admin)
+            return;
+
+        try
+        {
+            await PracticeService.DeleteAsync(practice.Id);
+            _practices.Remove(practice);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"削除に失敗しました。({ex.Message})";
+        }
+    }
+
+    private void OpenDetail(Practice practice) => Nav.NavigateTo($"practice/{practice.Id}");
+
+    private class PieceSelectionInput
+    {
+        public required string PieceId { get; init; }
+        public required string Title { get; init; }
+        public bool IsSelected { get; set; }
+    }
+}

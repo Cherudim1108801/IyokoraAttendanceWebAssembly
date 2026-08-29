@@ -1,0 +1,151 @@
+@page "/"
+@inject MemberService MemberService
+@inject PracticeService PracticeService
+@inject AttendanceService AttendanceService
+@inject LocalProfileStore Profile
+@inject NavigationManager Nav
+
+<div class="page-pad">
+
+    <h2 style="font-size:18px;font-weight:bold;">こんにちは、@Profile.Name さん</h2>
+
+    @if (!string.IsNullOrEmpty(_errorMessage))
+    {
+        <p class="error-text">@_errorMessage</p>
+    }
+
+    @if (_nextPractice is not null)
+    {
+        <div class="highlight-card">
+            <div class="highlight-card-label">次回の練習</div>
+            <div class="highlight-card-date">@_nextPractice.Date.ToString("yyyy年M月d日(ddd)")</div>
+            @if (!string.IsNullOrEmpty(_nextPractice.Title))
+            {
+                <div>@_nextPractice.Title</div>
+            }
+            @if (!string.IsNullOrEmpty(_nextPractice.Place))
+            {
+                <div style="color:#6E6E6E;">📍 @_nextPractice.Place</div>
+            }
+        </div>
+
+        <PartSummaryPanel Summaries="_partSummaries" />
+
+        <p style="font-weight:bold;margin:4px 0 0;">合計 参加予定: @_totalAttending 人</p>
+        <p class="hint-text">回答済み: @_totalResponded 人 (登録メンバー全 @_totalMembers 人)</p>
+
+        <div class="section">
+            <h3 class="section-title">あなたの出欠</h3>
+            <AttendanceButtons Status="_myStatus" StatusChanged="SetMyStatusAsync" />
+        </div>
+    }
+    else if (!_isBusy)
+    {
+        <div class="highlight-card">
+            <p style="font-weight:bold;margin:0 0 10px;">次回の練習予定が登録されていません</p>
+            <button class="iyk-btn iyk-btn-primary" @onclick='() => Nav.NavigateTo("schedule")'>予定を登録する</button>
+        </div>
+    }
+
+    @if (_isBusy)
+    {
+        <p class="hint-text">読み込み中...</p>
+    }
+</div>
+
+@code {
+    private List<PartSummary> _partSummaries = [];
+    private Practice? _nextPractice;
+    private AttendanceStatus _myStatus = AttendanceStatus.Undecided;
+    private int _totalAttending;
+    private int _totalMembers;
+    private int _totalResponded;
+    private bool _isBusy;
+    private string? _errorMessage;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _isBusy = true;
+        _errorMessage = null;
+        try
+        {
+            var practice = await PracticeService.GetNextUpcomingAsync();
+            var members = await MemberService.GetAllAsync();
+
+            _nextPractice = practice;
+            _totalMembers = members.Count;
+            _partSummaries = [];
+
+            if (practice is null)
+            {
+                _totalAttending = 0;
+                _totalResponded = 0;
+                _myStatus = AttendanceStatus.Undecided;
+                return;
+            }
+
+            var attendances = await AttendanceService.GetForPracticeAsync(practice.Id);
+            var mine = attendances.FirstOrDefault(a => a.MemberId == Profile.MemberId);
+            _myStatus = mine?.Status ?? AttendanceStatus.Undecided;
+
+            var attendingByPart = attendances
+                .Where(a => a.Status == AttendanceStatus.Attending)
+                .GroupBy(a => a.Part)
+                .ToDictionary(g => g.Key, g => g.Count());
+
+            var attendingNamesByPart = attendances
+                .Where(a => a.Status == AttendanceStatus.Attending)
+                .GroupBy(a => a.Part)
+                .ToDictionary(
+                    g => g.Key,
+                    g => (IReadOnlyList<string>)g.Select(a => a.MemberName).OrderBy(n => n, StringComparer.CurrentCultureIgnoreCase).ToList());
+
+            var membersByPart = members.GroupBy(m => m.Part).ToDictionary(g => g.Key, g => g.Count());
+
+            var summaries = new List<PartSummary>();
+            foreach (var part in PartTypeExtensions.All)
+            {
+                summaries.Add(new PartSummary
+                {
+                    Part = part,
+                    Label = part.ToDisplayName(),
+                    ColorHex = part.ToColorHex(),
+                    CardBackgroundColorHex = part.ToCardBackgroundColorHex(),
+                    AttendingCount = attendingByPart.GetValueOrDefault(part),
+                    MemberCount = membersByPart.GetValueOrDefault(part),
+                    AttendeeNames = attendingNamesByPart.GetValueOrDefault(part) ?? []
+                });
+            }
+            _partSummaries = summaries;
+
+            _totalAttending = attendingByPart.Values.Sum();
+            _totalResponded = attendances.Count(a => a.Status != AttendanceStatus.Undecided);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"読み込みに失敗しました。ネットワーク接続と Firebase 設定を確認してください。({ex.Message})";
+        }
+        finally
+        {
+            _isBusy = false;
+        }
+    }
+
+    private async Task SetMyStatusAsync(AttendanceStatus status)
+    {
+        if (_nextPractice is null)
+            return;
+
+        try
+        {
+            await AttendanceService.SetStatusAsync(_nextPractice.Id, Profile.MemberId, Profile.Name, Profile.Part, status);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"更新に失敗しました。({ex.Message})";
+        }
+    }
+}

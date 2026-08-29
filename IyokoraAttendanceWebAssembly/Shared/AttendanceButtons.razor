@@ -1,0 +1,23 @@
+@namespace IyokoraAttendanceWebAssembly.Shared
+
+<div class="attendance-buttons @(Disabled ? "disabled" : "")">
+    <button class="attend-btn attend-yes @(Status == AttendanceStatus.Attending ? "selected" : "")"
+            disabled="@Disabled" @onclick="() => Choose(AttendanceStatus.Attending)">参加</button>
+    <button class="attend-btn attend-no @(Status == AttendanceStatus.NotAttending ? "selected" : "")"
+            disabled="@Disabled" @onclick="() => Choose(AttendanceStatus.NotAttending)">不参加</button>
+    <button class="attend-btn attend-undecided @(Status == AttendanceStatus.Undecided ? "selected" : "")"
+            disabled="@Disabled" @onclick="() => Choose(AttendanceStatus.Undecided)">未定</button>
+</div>
+
+@code {
+    [Parameter]
+    public AttendanceStatus Status { get; set; }
+
+    [Parameter]
+    public bool Disabled { get; set; }
+
+    [Parameter]
+    public EventCallback<AttendanceStatus> StatusChanged { get; set; }
+
+    private Task Choose(AttendanceStatus status) => StatusChanged.InvokeAsync(status);
+}

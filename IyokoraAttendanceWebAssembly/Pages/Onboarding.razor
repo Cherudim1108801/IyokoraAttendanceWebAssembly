@@ -1,0 +1,83 @@
+@page "/onboarding"
+@inject MemberService MemberService
+@inject LocalProfileStore Profile
+@inject NavigationManager Nav
+
+<div class="page-pad" style="display:flex;flex-direction:column;justify-content:center;min-height:100%;">
+
+    <h1 style="text-align:center;font-size:28px;font-weight:bold;">ようこそ</h1>
+    <p style="text-align:center;font-size:14px;color:#6E6E6E;">
+        出席管理アプリを使うために、表示名とパートを登録してください。
+    </p>
+
+    <div class="field" style="margin-top:16px;">
+        <label>名前</label>
+        <input type="text" placeholder="例：山田 太郎" @bind="_name" @bind:event="oninput" />
+    </div>
+
+    <div class="field">
+        <label>パート</label>
+        <select @bind="_selectedPart">
+            @foreach (var option in _partOptions)
+            {
+                <option value="@option.Part">@option.Label</option>
+            }
+        </select>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_errorMessage))
+    {
+        <p class="error-text">@_errorMessage</p>
+    }
+
+    <button class="iyk-btn iyk-btn-primary iyk-btn-block" style="margin-top:16px;" disabled="@_isBusy" @onclick="SaveAsync">
+        登録して始める
+    </button>
+
+    @if (_isBusy)
+    {
+        <p class="hint-text" style="text-align:center;margin-top:10px;">保存中...</p>
+    }
+</div>
+
+@code {
+    private readonly List<PartOption> _partOptions = PartOption.All;
+    private string _name = string.Empty;
+    private PartType _selectedPart;
+    private string? _errorMessage;
+    private bool _isBusy;
+
+    protected override void OnInitialized()
+    {
+        _name = Profile.IsRegistered ? Profile.Name : string.Empty;
+        _selectedPart = Profile.IsRegistered ? Profile.Part : PartType.Soprano;
+    }
+
+    private async Task SaveAsync()
+    {
+        var trimmedName = _name.Trim();
+        if (string.IsNullOrEmpty(trimmedName))
+        {
+            _errorMessage = "名前を入力してください。";
+            return;
+        }
+
+        _isBusy = true;
+        _errorMessage = null;
+        try
+        {
+            Profile.Name = trimmedName;
+            Profile.Part = _selectedPart;
+            await MemberService.SaveAsync(Profile.MemberId, trimmedName, _selectedPart, Profile.Role, []);
+            Nav.NavigateTo("/");
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"保存に失敗しました。ネットワーク接続と Firebase 設定を確認してください。({ex.Message})";
+        }
+        finally
+        {
+            _isBusy = false;
+        }
+    }
+}

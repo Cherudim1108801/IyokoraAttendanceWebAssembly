@@ -1,0 +1,165 @@
+@page "/pieces"
+@inject PieceService PieceService
+@inject LocalProfileStore Profile
+
+<div class="page-pad">
+
+    @if (Profile.Role == Role.Admin)
+    {
+        <button class="iyk-btn iyk-btn-primary iyk-btn-block" @onclick="ToggleAddPanel">＋ 曲を追加</button>
+    }
+
+    @if (_isAddPanelVisible)
+    {
+        <div class="highlight-card" style="margin-top:10px;">
+            <div class="field">
+                <label>曲名</label>
+                <input type="text" placeholder="例：ふるさと" @bind="_newTitle" @bind:event="oninput" />
+            </div>
+
+            <label style="font-weight:bold;">使用パート</label>
+            <p class="hint-text">パートごとに使用の有無と、必要であれば内部分割方式を選べます。</p>
+
+            @foreach (var input in _partInputs)
+            {
+                <div style="display:flex;align-items:center;gap:8px;padding:6px 0;">
+                    <input type="checkbox" id="@("part_" + input.Part)" @bind="input.IsSelected" />
+                    <label for="@("part_" + input.Part)" style="flex:1;margin:0;font-weight:normal;">@input.Label</label>
+                    <select style="width:140px;" disabled="@(!input.IsSelected)" @bind="input.SelectedDivision">
+                        @foreach (var division in _divisionOptions)
+                        {
+                            <option value="@division">@division.ToDisplayName()</option>
+                        }
+                    </select>
+                </div>
+            }
+
+            <button class="iyk-btn iyk-btn-primary iyk-btn-block" style="margin-top:8px;" @onclick="AddPieceAsync">この内容で登録</button>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(_errorMessage))
+    {
+        <p class="error-text">@_errorMessage</p>
+    }
+
+    @if (_isBusy)
+    {
+        <p class="hint-text">読み込み中...</p>
+    }
+    else if (_pieces.Count == 0)
+    {
+        <p class="empty-text">登録されている曲はありません。</p>
+    }
+    else
+    {
+        @foreach (var piece in _pieces)
+        {
+            <div class="list-card">
+                <div>
+                    <p class="list-card-title">@piece.Title</p>
+                    <p class="list-card-sub">@piece.PartsSummary</p>
+                </div>
+                @if (Profile.Role == Role.Admin)
+                {
+                    <button class="iyk-btn-text-danger" @onclick="() => DeletePieceAsync(piece)">削除</button>
+                }
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private List<Piece> _pieces = [];
+    private List<PartAssignmentInput> _partInputs = PartTypeExtensions.All
+        .Select(p => new PartAssignmentInput { Part = p, Label = p.ToDisplayName() })
+        .ToList();
+    private readonly List<PartDivision> _divisionOptions = PartDivisionExtensions.All.ToList();
+    private bool _isAddPanelVisible;
+    private string _newTitle = string.Empty;
+    private bool _isBusy;
+    private string? _errorMessage;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _isBusy = true;
+        _errorMessage = null;
+        try
+        {
+            _pieces = await PieceService.GetAllAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"読み込みに失敗しました。({ex.Message})";
+        }
+        finally
+        {
+            _isBusy = false;
+        }
+    }
+
+    private void ToggleAddPanel() => _isAddPanelVisible = !_isAddPanelVisible;
+
+    private async Task AddPieceAsync()
+    {
+        if (Profile.Role != Role.Admin)
+            return;
+
+        var trimmedTitle = _newTitle.Trim();
+        if (string.IsNullOrEmpty(trimmedTitle))
+        {
+            _errorMessage = "曲名を入力してください。";
+            return;
+        }
+
+        _errorMessage = null;
+        try
+        {
+            var assignments = _partInputs
+                .Where(p => p.IsSelected)
+                .Select(p => new PiecePartAssignment { Part = p.Part, Division = p.SelectedDivision })
+                .ToList();
+
+            await PieceService.CreateAsync(trimmedTitle, assignments);
+
+            _newTitle = string.Empty;
+            foreach (var input in _partInputs)
+            {
+                input.IsSelected = false;
+                input.SelectedDivision = PartDivision.None;
+            }
+            _isAddPanelVisible = false;
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"曲の追加に失敗しました。({ex.Message})";
+        }
+    }
+
+    private async Task DeletePieceAsync(Piece piece)
+    {
+        if (Profile.Role != Role.Admin)
+            return;
+
+        try
+        {
+            await PieceService.DeleteAsync(piece.Id);
+            _pieces.Remove(piece);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"削除に失敗しました。({ex.Message})";
+        }
+    }
+
+    private class PartAssignmentInput
+    {
+        public required PartType Part { get; init; }
+        public required string Label { get; init; }
+        public bool IsSelected { get; set; }
+        public PartDivision SelectedDivision { get; set; } = PartDivision.None;
+    }
+}

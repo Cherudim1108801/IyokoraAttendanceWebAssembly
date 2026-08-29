@@ -1,0 +1,30 @@
+.bottom-nav {
+    display: flex;
+    flex-shrink: 0;
+    border-top: 1px solid #e1e1e1;
+    background: #ffffff;
+    padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+.bottom-nav ::deep .bottom-nav-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    padding: 6px 2px 8px;
+    text-decoration: none;
+    color: #6E6E6E;
+    font-size: 11px;
+    line-height: 1.2;
+}
+
+.bottom-nav ::deep .bottom-nav-item.active {
+    color: #512BD4;
+}
+
+.bottom-nav ::deep .bottom-nav-icon {
+    font-size: 20px;
+    line-height: 1;
+}

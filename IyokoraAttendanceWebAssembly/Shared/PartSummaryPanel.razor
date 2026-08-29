@@ -1,0 +1,56 @@
+@namespace IyokoraAttendanceWebAssembly.Shared
+
+<div class="section">
+    <h3 class="section-title">@Title</h3>
+    <p class="hint-text">カードをタップすると参加者の名前を確認できます</p>
+
+    <div class="part-grid">
+        @foreach (var summary in Summaries)
+        {
+            <div class="part-card" style="background-color:@summary.CardBackgroundColorHex" @onclick="() => ShowDetail(summary)">
+                <div class="part-card-label">@summary.Label</div>
+                <div class="part-card-count">@summary.AttendingCount</div>
+                <div class="part-card-sub">@summary.CountLabel</div>
+            </div>
+        }
+    </div>
+</div>
+
+@if (_selected is not null)
+{
+    <div class="iyk-modal-backdrop" @onclick="CloseModal">
+        <div class="iyk-modal-panel" @onclick:stopPropagation="true">
+            <div class="iyk-modal-title" style="color:@_selected.ColorHex">@_selected.Label</div>
+            <div class="iyk-modal-sub">@_selected.CountLabel</div>
+            <hr />
+            @if (_selected.AttendeeNames.Count == 0)
+            {
+                <p class="hint-text">参加予定のメンバーはいません。</p>
+            }
+            else
+            {
+                <ul class="attendee-list">
+                    @foreach (var name in _selected.AttendeeNames)
+                    {
+                        <li>@name</li>
+                    }
+                </ul>
+            }
+            <button class="iyk-btn iyk-btn-block" @onclick="CloseModal">閉じる</button>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<PartSummary> Summaries { get; set; } = [];
+
+    [Parameter]
+    public string Title { get; set; } = "パート別 参加予定人数";
+
+    private PartSummary? _selected;
+
+    private void ShowDetail(PartSummary summary) => _selected = summary;
+
+    private void CloseModal() => _selected = null;
+}
