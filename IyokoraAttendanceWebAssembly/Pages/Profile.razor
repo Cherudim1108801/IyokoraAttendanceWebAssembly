@@ -8,6 +8,12 @@
 <div class="page-pad">
 
     <div class="field">
+        <label>ログインID</label>
+        <p style="font-weight:bold;font-size:18px;letter-spacing:1px;">@ProfileStore.LoginId</p>
+        <p class="hint-text">他の端末でこのアプリを使う場合は、このIDでログインしてください。</p>
+    </div>
+
+    <div class="field">
         <label>名前</label>
         <input type="text" placeholder="例：山田 太郎" @bind="_name" @bind:event="oninput" />
     </div>
@@ -183,7 +189,8 @@
             ProfileStore.Part = _selectedPart;
             ProfileStore.Role = _selectedRole;
             ProfileStore.PieceParts = pieceParts;
-            await MemberService.SaveAsync(ProfileStore.MemberId, trimmedName, _selectedPart, _selectedRole, pieceParts);
+            var loginId = await MemberService.SaveAsync(ProfileStore.MemberId, trimmedName, _selectedPart, _selectedRole, pieceParts, ProfileStore.LoginId);
+            ProfileStore.LoginId = loginId;
             _savedMessage = "保存しました。";
         }
         catch (Exception ex)

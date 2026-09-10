@@ -14,6 +14,7 @@ public class LocalProfileStore(IJSInProcessRuntime js)
     private const string KeyPart = "profile.part";
     private const string KeyRole = "profile.role";
     private const string KeyPieceParts = "profile.pieceParts";
+    private const string KeyLoginId = "profile.loginId";
 
     private string? Get(string key) => js.Invoke<string?>("localStorage.getItem", key);
     private void Set(string key, string value) => js.InvokeVoid("localStorage.setItem", key, value);
@@ -24,6 +25,7 @@ public class LocalProfileStore(IJSInProcessRuntime js)
 
     /// <summary>
     /// この端末に割り当てられた MemberId。未発行の場合は初回アクセス時に自動生成して永続化する。
+    /// ログインID でログインした場合は、その持ち主の MemberId に上書きされる。
     /// </summary>
     public string MemberId
     {
@@ -37,6 +39,17 @@ public class LocalProfileStore(IJSInProcessRuntime js)
             }
             return id;
         }
+        set => Set(KeyMemberId, value);
+    }
+
+    /// <summary>
+    /// 複数端末から同じアカウントを使うためのログインID。オンボーディング完了時に発行され、
+    /// 別端末では <see cref="MemberId"/> 等と併せてこの値をログイン時に受け取って保存する。
+    /// </summary>
+    public string LoginId
+    {
+        get => Get(KeyLoginId) ?? string.Empty;
+        set => Set(KeyLoginId, value);
     }
 
     /// <summary>表示名。</summary>
@@ -81,5 +94,6 @@ public class LocalProfileStore(IJSInProcessRuntime js)
         Remove(KeyPart);
         Remove(KeyRole);
         Remove(KeyPieceParts);
+        Remove(KeyLoginId);
     }
 }
