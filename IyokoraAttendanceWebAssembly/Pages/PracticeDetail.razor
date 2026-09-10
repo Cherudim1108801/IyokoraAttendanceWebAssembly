@@ -530,6 +530,7 @@
 
         var selectedPieceIds = _practice.Pieces.Select(p => p.PieceId).ToHashSet();
         _editPieceInputs = _pieces
+            .Where(p => !p.IsArchived || selectedPieceIds.Contains(p.Id))
             .Select(p => new PieceSelectionInput { PieceId = p.Id, Title = p.Title, IsSelected = selectedPieceIds.Contains(p.Id) })
             .ToList();
         _isPiecesEditPanelVisible = true;
