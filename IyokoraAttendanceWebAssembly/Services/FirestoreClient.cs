@@ -136,17 +136,23 @@ public class FirestoreClient(HttpClient http)
         return new FirestoreDocument { Id = id, Fields = fields };
     }
 
+    /// <summary>
+    /// フィールド値を解析する。手動でのデータ削除・編集等により想定外の形（値が欠けている、
+    /// 数値や日時として解釈できない文字列が入っている等）になっていても例外を投げず、
+    /// 解析できない場合は <c>null</c> を返す（呼び出し元の <see cref="FirestoreDocument"/> の
+    /// Get* 系メソッドが持つフォールバック値に委ねる）。
+    /// </summary>
     private static object? ParseValue(JsonObject valueObj)
     {
         foreach (var (kind, value) in valueObj)
         {
             return kind switch
             {
-                "stringValue" => value?.GetValue<string>(),
+                "stringValue" => TryGetString(value),
                 "booleanValue" => value?.GetValue<bool>(),
-                "integerValue" => long.Parse(value!.GetValue<string>(), CultureInfo.InvariantCulture),
+                "integerValue" => long.TryParse(TryGetString(value), NumberStyles.Integer, CultureInfo.InvariantCulture, out var l) ? l : null,
                 "doubleValue" => value?.GetValue<double>(),
-                "timestampValue" => DateTime.Parse(value!.GetValue<string>(), CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal),
+                "timestampValue" => DateTime.TryParse(TryGetString(value), CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var dt) ? dt : null,
                 "arrayValue" => ParseArray(value as JsonObject),
                 "mapValue" => ParseMap(value as JsonObject),
                 "nullValue" => null,
@@ -154,6 +160,22 @@ public class FirestoreClient(HttpClient http)
             };
         }
         return null;
+    }
+
+    /// <summary>
+    /// JSON ノードから文字列を取り出す。想定と異なる型（例：手動編集で数値が入っている等）で
+    /// 変換に失敗しても例外を投げず <c>null</c> を返す。
+    /// </summary>
+    private static string? TryGetString(JsonNode? node)
+    {
+        try
+        {
+            return node?.GetValue<string>();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or FormatException)
+        {
+            return null;
+        }
     }
 
     private static List<object?> ParseArray(JsonObject? arrayValue)
