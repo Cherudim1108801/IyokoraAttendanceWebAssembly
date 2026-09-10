@@ -10,7 +10,7 @@ namespace IyokoraAttendanceWebAssembly.Services;
 /// 認証なし運用のため、Firestore 側のセキュリティルールで
 /// 未認証アクセスを許可しておく必要がある（<see cref="FirebaseOptions"/> 参照）。
 /// </summary>
-public class FirestoreClient(HttpClient http)
+public class FirestoreClient(HttpClient http) : IFirestoreClient
 {
     /// <summary>指定コレクション内の全ドキュメントを取得する（ページングを内部で吸収）。</summary>
     /// <param name="collection">コレクション名。</param>

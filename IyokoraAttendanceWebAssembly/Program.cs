@@ -12,7 +12,7 @@ builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.
 
 // Services
 builder.Services.AddScoped(sp => (IJSInProcessRuntime)sp.GetRequiredService<IJSRuntime>());
-builder.Services.AddScoped<FirestoreClient>();
+builder.Services.AddScoped<IFirestoreClient, FirestoreClient>();
 builder.Services.AddScoped<NameCipher>();
 builder.Services.AddScoped<LocalProfileStore>();
 builder.Services.AddScoped<MemberService>();

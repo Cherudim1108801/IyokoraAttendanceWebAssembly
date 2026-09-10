@@ -3,7 +3,7 @@ using IyokoraAttendanceWebAssembly.Models;
 namespace IyokoraAttendanceWebAssembly.Services;
 
 /// <summary>Firestore の <c>attendances</c> コレクションに対する出欠情報の取得・更新を担う。</summary>
-public class AttendanceService(FirestoreClient client)
+public class AttendanceService(IFirestoreClient client)
 {
     private const string Collection = "attendances";
 

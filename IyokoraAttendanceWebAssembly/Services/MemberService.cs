@@ -3,7 +3,7 @@ using IyokoraAttendanceWebAssembly.Models;
 namespace IyokoraAttendanceWebAssembly.Services;
 
 /// <summary>Firestore の <c>members</c> コレクションに対するメンバー情報の取得・保存を担う。</summary>
-public class MemberService(FirestoreClient client, NameCipher nameCipher)
+public class MemberService(IFirestoreClient client, NameCipher nameCipher)
 {
     private const string Collection = "members";
 
