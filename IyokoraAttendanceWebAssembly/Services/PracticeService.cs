@@ -58,11 +58,14 @@ public class PracticeService(IFirestoreClient client)
     /// <param name="date">練習日（時刻情報は無視される）。</param>
     /// <param name="title">タイトル（任意）。</param>
     /// <param name="place">場所（任意）。</param>
+    /// <param name="startTime">練習開始時刻（"HH:mm" 形式、任意）。</param>
+    /// <param name="endTime">練習終了時刻（"HH:mm" 形式、任意）。</param>
+    /// <param name="timelineItems">タイムスケジュール（10分単位の詳細な予定）。</param>
     /// <param name="pieces">演奏予定曲。</param>
     /// <param name="requiresKeyPickup">鍵の受け取りが必要かどうか。</param>
     /// <param name="ct">キャンセルトークン。</param>
     /// <returns>発行された練習予定ID。</returns>
-    public async Task<string> CreateAsync(DateTime date, string title, string place, IReadOnlyList<PracticePieceRef> pieces, bool requiresKeyPickup, CancellationToken ct = default)
+    public async Task<string> CreateAsync(DateTime date, string title, string place, string startTime, string endTime, IReadOnlyList<PracticeTimelineItem> timelineItems, IReadOnlyList<PracticePieceRef> pieces, bool requiresKeyPickup, CancellationToken ct = default)
     {
         var id = Guid.NewGuid().ToString("N");
         // 練習日は時刻を持たないカレンダー日付として扱う。DateTime.ToUniversalTime() による
@@ -74,6 +77,9 @@ public class PracticeService(IFirestoreClient client)
             ["date"] = dateOnly,
             ["title"] = title,
             ["place"] = place,
+            ["startTime"] = startTime,
+            ["endTime"] = endTime,
+            ["timeline"] = ToTimelineFields(timelineItems),
             ["pieces"] = ToPieceFields(pieces),
             ["requiresKeyPickup"] = requiresKeyPickup,
             ["keyPickedUp"] = false,
@@ -81,6 +87,36 @@ public class PracticeService(IFirestoreClient client)
         };
         await client.UpsertDocumentAsync(Collection, id, fields, ct);
         return id;
+    }
+
+    /// <summary>練習予定の開始・終了時刻とタイムスケジュールを更新する。</summary>
+    /// <param name="practiceId">練習予定ID。</param>
+    /// <param name="startTime">練習開始時刻（"HH:mm" 形式、任意）。</param>
+    /// <param name="endTime">練習終了時刻（"HH:mm" 形式、任意）。</param>
+    /// <param name="timelineItems">タイムスケジュール（10分単位の詳細な予定）。</param>
+    /// <param name="ct">キャンセルトークン。</param>
+    public async Task UpdateScheduleAsync(string practiceId, string startTime, string endTime, IReadOnlyList<PracticeTimelineItem> timelineItems, CancellationToken ct = default)
+    {
+        var fields = new Dictionary<string, object?>
+        {
+            ["startTime"] = startTime,
+            ["endTime"] = endTime,
+            ["timeline"] = ToTimelineFields(timelineItems)
+        };
+        await client.UpsertDocumentAsync(Collection, practiceId, fields, ct);
+    }
+
+    /// <summary>練習予定の演奏予定曲を更新する。</summary>
+    /// <param name="practiceId">練習予定ID。</param>
+    /// <param name="pieces">演奏予定曲（録音リンク・強調表示の設定を含む）。</param>
+    /// <param name="ct">キャンセルトークン。</param>
+    public async Task UpdatePiecesAsync(string practiceId, IReadOnlyList<PracticePieceRef> pieces, CancellationToken ct = default)
+    {
+        var fields = new Dictionary<string, object?>
+        {
+            ["pieces"] = ToPieceFields(pieces)
+        };
+        await client.UpsertDocumentAsync(Collection, practiceId, fields, ct);
     }
 
     /// <summary>指定IDの練習予定を削除する。</summary>
@@ -152,6 +188,23 @@ public class PracticeService(IFirestoreClient client)
         await client.UpsertDocumentAsync(Collection, practiceId, fields, ct);
     }
 
+    private static List<object?> ToTimelineFields(IReadOnlyList<PracticeTimelineItem> items) => items
+        .Select(i => new Dictionary<string, object?>
+        {
+            ["startTime"] = i.StartTime,
+            ["endTime"] = i.EndTime,
+            ["content"] = i.Content
+        })
+        .Cast<object?>()
+        .ToList();
+
+    private static PracticeTimelineItem ToTimelineItem(Dictionary<string, object?> fields) => new()
+    {
+        StartTime = fields.GetValueOrDefault("startTime") as string ?? string.Empty,
+        EndTime = fields.GetValueOrDefault("endTime") as string ?? string.Empty,
+        Content = fields.GetValueOrDefault("content") as string ?? string.Empty
+    };
+
     private static List<object?> ToPieceFields(IReadOnlyList<PracticePieceRef> pieces) => pieces
         .Select(p => new Dictionary<string, object?>
         {
@@ -169,6 +222,12 @@ public class PracticeService(IFirestoreClient client)
         Date = doc.GetDateTime("date"),
         Title = doc.GetString("title"),
         Place = doc.GetString("place"),
+        StartTime = doc.GetString("startTime"),
+        EndTime = doc.GetString("endTime"),
+        TimelineItems = doc.GetList("timeline")
+            .OfType<Dictionary<string, object?>>()
+            .Select(ToTimelineItem)
+            .ToList(),
         Pieces = doc.GetList("pieces")
             .OfType<Dictionary<string, object?>>()
             .Select(ToPieceRef)

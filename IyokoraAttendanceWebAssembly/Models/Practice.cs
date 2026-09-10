@@ -15,6 +15,15 @@ public class Practice
     /// <summary>場所（任意）。</summary>
     public string Place { get; set; } = string.Empty;
 
+    /// <summary>練習開始時刻（"HH:mm" 形式、任意）。未設定の場合は空文字列。</summary>
+    public string StartTime { get; set; } = string.Empty;
+
+    /// <summary>練習終了時刻（"HH:mm" 形式、任意）。未設定の場合は空文字列。</summary>
+    public string EndTime { get; set; } = string.Empty;
+
+    /// <summary>練習のタイムスケジュール（10分単位で登録する詳細な予定）。</summary>
+    public List<PracticeTimelineItem> TimelineItems { get; set; } = [];
+
     /// <summary>この練習で演奏予定の曲。</summary>
     public List<PracticePieceRef> Pieces { get; set; } = [];
 
@@ -32,4 +41,9 @@ public class Practice
 
     /// <summary>一覧表示用：演奏予定曲の曲名を読点区切りで結合した文字列。未選択の場合は空文字列。</summary>
     public string PiecesSummary => string.Join("、", Pieces.Select(p => p.Title));
+
+    /// <summary>一覧表示用：開始〜終了時刻を結合した文字列。いずれか未設定の場合は空文字列。</summary>
+    public string TimeRangeSummary => !string.IsNullOrEmpty(StartTime) && !string.IsNullOrEmpty(EndTime)
+        ? $"{StartTime}〜{EndTime}"
+        : string.Empty;
 }

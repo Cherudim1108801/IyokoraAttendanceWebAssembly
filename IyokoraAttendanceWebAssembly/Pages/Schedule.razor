@@ -26,8 +26,37 @@
                 <label>場所（任意）</label>
                 <input type="text" placeholder="例：市民会館 音楽室" @bind="_newPlace" @bind:event="oninput" />
             </div>
+            <div class="field">
+                <label>開始時刻（任意）</label>
+                <input type="time" step="600" @bind="_newStartTime" @bind:event="oninput" />
+            </div>
+            <div class="field">
+                <label>終了時刻（任意）</label>
+                <input type="time" step="600" @bind="_newEndTime" @bind:event="oninput" />
+            </div>
 
-            <label style="font-weight:bold;">練習する曲（任意）</label>
+            <label style="font-weight:bold;">タイムスケジュール（任意・10分単位）</label>
+            @foreach (var item in _newTimelineItems)
+            {
+                <div class="highlight-card" style="margin-top:6px;">
+                    <div class="field">
+                        <label>開始</label>
+                        <input type="time" step="600" @bind="item.StartTime" @bind:event="oninput" />
+                    </div>
+                    <div class="field">
+                        <label>終了</label>
+                        <input type="time" step="600" @bind="item.EndTime" @bind:event="oninput" />
+                    </div>
+                    <div class="field">
+                        <label>内容</label>
+                        <input type="text" placeholder="例：基礎合奏" @bind="item.Content" @bind:event="oninput" />
+                    </div>
+                    <button class="iyk-btn-text-danger" @onclick="() => RemoveTimelineItem(item)">この項目を削除</button>
+                </div>
+            }
+            <button class="iyk-btn iyk-btn-block" style="margin-top:6px;" @onclick="AddTimelineItem">＋ タイムスケジュールの項目を追加</button>
+
+            <label style="font-weight:bold;margin-top:8px;display:block;">練習する曲（任意）</label>
             @if (_pieceInputs.Count == 0)
             {
                 <p class="hint-text">登録されている曲はありません。「曲」タブから登録できます。</p>
@@ -76,6 +105,10 @@
                     {
                         <p class="list-card-sub">@practice.Title</p>
                     }
+                    @if (!string.IsNullOrEmpty(practice.TimeRangeSummary))
+                    {
+                        <p class="list-card-sub">🕒 @practice.TimeRangeSummary</p>
+                    }
                     @if (!string.IsNullOrEmpty(practice.Place))
                     {
                         <p class="list-card-sub">📍 @practice.Place</p>
@@ -101,6 +134,9 @@
     private DateTime _newDate = DateTime.Today.AddDays(7);
     private string _newTitle = string.Empty;
     private string _newPlace = string.Empty;
+    private TimeOnly? _newStartTime;
+    private TimeOnly? _newEndTime;
+    private List<TimelineItemInput> _newTimelineItems = [];
     private bool _newRequiresKeyPickup;
     private bool _isBusy;
     private string? _errorMessage;
@@ -130,12 +166,36 @@
 
     private void ToggleAddPanel() => _isAddPanelVisible = !_isAddPanelVisible;
 
+    private void AddTimelineItem() =>
+        _newTimelineItems.Add(new TimelineItemInput());
+
+    private void RemoveTimelineItem(TimelineItemInput item) =>
+        _newTimelineItems.Remove(item);
+
     private async Task AddPracticeAsync()
     {
         if (Profile.Role != Role.Admin)
             return;
 
         _errorMessage = null;
+
+        if (!PracticeScheduleValidator.TryValidateTimeRange(_newStartTime, _newEndTime, out var rangeError))
+        {
+            _errorMessage = rangeError;
+            return;
+        }
+
+        var timelineItems = new List<PracticeTimelineItem>();
+        foreach (var item in _newTimelineItems)
+        {
+            if (!PracticeScheduleValidator.TryValidateTimelineItem(item, out var itemError))
+            {
+                _errorMessage = itemError;
+                return;
+            }
+            timelineItems.Add(new PracticeTimelineItem { StartTime = item.StartTime!.Value.ToString("HH:mm"), EndTime = item.EndTime!.Value.ToString("HH:mm"), Content = item.Content.Trim() });
+        }
+
         try
         {
             var date = _newDate;
@@ -144,9 +204,14 @@
                 .Select(p => new PracticePieceRef { PieceId = p.PieceId, Title = p.Title })
                 .ToList();
 
-            await PracticeService.CreateAsync(date, _newTitle.Trim(), _newPlace.Trim(), selectedPieces, _newRequiresKeyPickup);
+            var startTime = _newStartTime?.ToString("HH:mm") ?? string.Empty;
+            var endTime = _newEndTime?.ToString("HH:mm") ?? string.Empty;
+            await PracticeService.CreateAsync(date, _newTitle.Trim(), _newPlace.Trim(), startTime, endTime, timelineItems, selectedPieces, _newRequiresKeyPickup);
             _newTitle = string.Empty;
             _newPlace = string.Empty;
+            _newStartTime = null;
+            _newEndTime = null;
+            _newTimelineItems = [];
             _newDate = DateTime.Today.AddDays(7);
             _newRequiresKeyPickup = false;
             _isAddPanelVisible = false;
@@ -175,11 +240,4 @@
     }
 
     private void OpenDetail(Practice practice) => Nav.NavigateTo($"practice/{practice.Id}");
-
-    private class PieceSelectionInput
-    {
-        public required string PieceId { get; init; }
-        public required string Title { get; init; }
-        public bool IsSelected { get; set; }
-    }
 }

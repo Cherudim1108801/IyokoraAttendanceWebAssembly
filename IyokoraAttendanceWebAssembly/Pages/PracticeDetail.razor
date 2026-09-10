@@ -5,6 +5,7 @@
 @inject PieceService PieceService
 @inject LocalProfileStore Profile
 @inject IJSRuntime JS
+@inject NavigationManager Nav
 
 <div class="page-pad">
 
@@ -16,6 +17,10 @@
             {
                 <p style="margin:4px 0;">@_practice.Title</p>
             }
+            @if (!string.IsNullOrEmpty(_practice.TimeRangeSummary))
+            {
+                <p class="hint-text">🕒 @_practice.TimeRangeSummary</p>
+            }
             @if (!string.IsNullOrEmpty(_practice.Place))
             {
                 <p class="hint-text">📍 @_practice.Place</p>
@@ -25,6 +30,122 @@
                 <p class="hint-text">🎵 @_practice.PiecesSummary</p>
             }
             <p>参加予定: @_totalAttending / @_totalMembers 人</p>
+        </div>
+    }
+
+    @if (_practice is not null)
+    {
+        <div class="section">
+            <div style="display:flex;align-items:center;justify-content:space-between;">
+                <h3 class="section-title" style="margin:0;">タイムスケジュール</h3>
+                @if (Profile.Role == Role.Admin && !_isScheduleEditPanelVisible)
+                {
+                    <button class="iyk-btn-text" @onclick="OpenScheduleEditPanel">編集</button>
+                }
+            </div>
+
+            @if (_isScheduleEditPanelVisible)
+            {
+                <div class="highlight-card" style="margin-top:6px;">
+                    <div class="field">
+                        <label>開始時刻（任意）</label>
+                        <input type="time" step="600" @bind="_editStartTime" @bind:event="oninput" />
+                    </div>
+                    <div class="field">
+                        <label>終了時刻（任意）</label>
+                        <input type="time" step="600" @bind="_editEndTime" @bind:event="oninput" />
+                    </div>
+
+                    @foreach (var item in _editTimelineItems)
+                    {
+                        <div class="highlight-card" style="margin-top:6px;">
+                            <div class="field">
+                                <label>開始</label>
+                                <input type="time" step="600" @bind="item.StartTime" @bind:event="oninput" />
+                            </div>
+                            <div class="field">
+                                <label>終了</label>
+                                <input type="time" step="600" @bind="item.EndTime" @bind:event="oninput" />
+                            </div>
+                            <div class="field">
+                                <label>内容</label>
+                                <input type="text" placeholder="例：基礎合奏" @bind="item.Content" @bind:event="oninput" />
+                            </div>
+                            <button class="iyk-btn-text-danger" @onclick="() => RemoveEditTimelineItem(item)">この項目を削除</button>
+                        </div>
+                    }
+                    <button class="iyk-btn iyk-btn-block" style="margin-top:6px;" @onclick="AddEditTimelineItem">＋ タイムスケジュールの項目を追加</button>
+
+                    <div style="display:flex;gap:8px;margin-top:8px;">
+                        <button class="iyk-btn iyk-btn-primary" style="flex:1;" @onclick="SaveScheduleAsync">保存</button>
+                        <button class="iyk-btn" style="flex:1;" @onclick="CloseScheduleEditPanel">キャンセル</button>
+                    </div>
+                </div>
+            }
+            else if (_practice.TimelineItems.Count == 0)
+            {
+                <p class="hint-text">タイムスケジュールは登録されていません。</p>
+            }
+            else
+            {
+                @foreach (var item in _practice.TimelineItems.OrderBy(i => i.StartTime))
+                {
+                    <div class="list-card">
+                        <div>
+                            <p class="list-card-title">@item.StartTime 〜 @item.EndTime</p>
+                            @if (!string.IsNullOrEmpty(item.Content))
+                            {
+                                <p class="list-card-sub">@item.Content</p>
+                            }
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+    }
+
+    @if (_practice is not null)
+    {
+        <div class="section">
+            <div style="display:flex;align-items:center;justify-content:space-between;">
+                <h3 class="section-title" style="margin:0;">演奏予定曲</h3>
+                @if (Profile.Role == Role.Admin && !_isPiecesEditPanelVisible)
+                {
+                    <button class="iyk-btn-text" @onclick="OpenPiecesEditPanel">編集</button>
+                }
+            </div>
+
+            @if (_isPiecesEditPanelVisible)
+            {
+                <div class="highlight-card" style="margin-top:6px;">
+                    @if (_editPieceInputs.Count == 0)
+                    {
+                        <p class="hint-text">登録されている曲はありません。「曲」タブから登録できます。</p>
+                    }
+                    else
+                    {
+                        @foreach (var input in _editPieceInputs)
+                        {
+                            <div class="checkbox-row">
+                                <input type="checkbox" id="@("edit_piece_" + input.PieceId)" @bind="input.IsSelected" />
+                                <label for="@("edit_piece_" + input.PieceId)">@input.Title</label>
+                            </div>
+                        }
+                    }
+                    <div style="display:flex;gap:8px;margin-top:8px;">
+                        <button class="iyk-btn iyk-btn-primary" style="flex:1;" @onclick="SavePiecesAsync">保存</button>
+                        <button class="iyk-btn" style="flex:1;" @onclick="ClosePiecesEditPanel">キャンセル</button>
+                    </div>
+                </div>
+            }
+            else if (_practice.Pieces.Count == 0)
+            {
+                <p class="hint-text">演奏予定曲は登録されていません。</p>
+            }
+            else
+            {
+                <p>@_practice.PiecesSummary</p>
+            }
         </div>
     }
 
@@ -126,6 +247,13 @@
                 }
             </div>
         }
+
+        @if (Profile.Role == Role.Admin)
+        {
+            <div class="section">
+                <button class="iyk-btn iyk-btn-outline-danger iyk-btn-block" @onclick="DeletePracticeAsync">この練習予定を削除</button>
+            </div>
+        }
     }
     else if (_isBusy)
     {
@@ -147,6 +275,15 @@
     private bool _isBusy;
     private string? _errorMessage;
 
+    private bool _isScheduleEditPanelVisible;
+    private TimeOnly? _editStartTime;
+    private TimeOnly? _editEndTime;
+    private List<TimelineItemInput> _editTimelineItems = [];
+
+    private List<Piece> _pieces = [];
+    private bool _isPiecesEditPanelVisible;
+    private List<PieceSelectionInput> _editPieceInputs = [];
+
     protected override Task OnInitializedAsync() => LoadAsync();
 
     private async Task LoadAsync()
@@ -162,6 +299,7 @@
             _isAttendanceEditable = _practice is null || _practice.Date.Date >= DateTime.Today;
             var members = await MemberService.GetAllAsync();
             var pieces = await PieceService.GetAllAsync(includeArchived: true);
+            _pieces = pieces;
             var attendances = await AttendanceService.GetForPracticeAsync(PracticeId);
             var statusByMemberId = attendances.ToDictionary(a => a.MemberId, a => a.Status);
 
@@ -319,6 +457,124 @@
         catch (Exception ex)
         {
             _errorMessage = $"更新に失敗しました。({ex.Message})";
+        }
+    }
+
+    private void OpenScheduleEditPanel()
+    {
+        if (_practice is null)
+            return;
+
+        _editStartTime = PracticeScheduleValidator.ParseTimeOrNull(_practice.StartTime);
+        _editEndTime = PracticeScheduleValidator.ParseTimeOrNull(_practice.EndTime);
+        _editTimelineItems = _practice.TimelineItems
+            .OrderBy(i => i.StartTime)
+            .Select(i => new TimelineItemInput
+            {
+                StartTime = PracticeScheduleValidator.ParseTimeOrNull(i.StartTime),
+                EndTime = PracticeScheduleValidator.ParseTimeOrNull(i.EndTime),
+                Content = i.Content
+            })
+            .ToList();
+        _isScheduleEditPanelVisible = true;
+    }
+
+    private void CloseScheduleEditPanel() => _isScheduleEditPanelVisible = false;
+
+    private void AddEditTimelineItem() => _editTimelineItems.Add(new TimelineItemInput());
+
+    private void RemoveEditTimelineItem(TimelineItemInput item) => _editTimelineItems.Remove(item);
+
+    private async Task SaveScheduleAsync()
+    {
+        if (Profile.Role != Role.Admin || _practice is null)
+            return;
+
+        _errorMessage = null;
+
+        if (!PracticeScheduleValidator.TryValidateTimeRange(_editStartTime, _editEndTime, out var rangeError))
+        {
+            _errorMessage = rangeError;
+            return;
+        }
+
+        var timelineItems = new List<PracticeTimelineItem>();
+        foreach (var item in _editTimelineItems)
+        {
+            if (!PracticeScheduleValidator.TryValidateTimelineItem(item, out var itemError))
+            {
+                _errorMessage = itemError;
+                return;
+            }
+            timelineItems.Add(new PracticeTimelineItem { StartTime = item.StartTime!.Value.ToString("HH:mm"), EndTime = item.EndTime!.Value.ToString("HH:mm"), Content = item.Content.Trim() });
+        }
+
+        try
+        {
+            var startTime = _editStartTime?.ToString("HH:mm") ?? string.Empty;
+            var endTime = _editEndTime?.ToString("HH:mm") ?? string.Empty;
+            await PracticeService.UpdateScheduleAsync(_practice.Id, startTime, endTime, timelineItems);
+            _isScheduleEditPanelVisible = false;
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"タイムスケジュールの保存に失敗しました。({ex.Message})";
+        }
+    }
+
+    private void OpenPiecesEditPanel()
+    {
+        if (_practice is null)
+            return;
+
+        var selectedPieceIds = _practice.Pieces.Select(p => p.PieceId).ToHashSet();
+        _editPieceInputs = _pieces
+            .Select(p => new PieceSelectionInput { PieceId = p.Id, Title = p.Title, IsSelected = selectedPieceIds.Contains(p.Id) })
+            .ToList();
+        _isPiecesEditPanelVisible = true;
+    }
+
+    private void ClosePiecesEditPanel() => _isPiecesEditPanelVisible = false;
+
+    private async Task SavePiecesAsync()
+    {
+        if (Profile.Role != Role.Admin || _practice is null)
+            return;
+
+        _errorMessage = null;
+
+        var updatedPieces = PracticePieceMerger.MergeSelectedPieces(_practice.Pieces, _editPieceInputs);
+
+        try
+        {
+            await PracticeService.UpdatePiecesAsync(_practice.Id, updatedPieces);
+            _isPiecesEditPanelVisible = false;
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"演奏予定曲の保存に失敗しました。({ex.Message})";
+        }
+    }
+
+    private async Task DeletePracticeAsync()
+    {
+        if (Profile.Role != Role.Admin || _practice is null)
+            return;
+
+        var confirmed = await JS.InvokeAsync<bool>("confirm", "この練習予定を削除します。よろしいですか？");
+        if (!confirmed)
+            return;
+
+        try
+        {
+            await PracticeService.DeleteAsync(_practice.Id);
+            Nav.NavigateTo("schedule");
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"削除に失敗しました。({ex.Message})";
         }
     }
 
