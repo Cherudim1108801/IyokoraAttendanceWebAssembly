@@ -11,13 +11,19 @@
       {
         "source": "**/*.dll",
         "headers": [
-          { "key": "Content-Type", "value": "application/octet-stream" }
+          {
+            "key": "Content-Type",
+            "value": "application/octet-stream"
+          }
         ]
       },
       {
         "source": "_framework/**",
         "headers": [
-          { "key": "Cache-Control", "value": "max-age=31536000, immutable" }
+          {
+            "key": "Cache-Control",
+            "value": "max-age=31536000, immutable"
+          }
         ]
       }
     ],
