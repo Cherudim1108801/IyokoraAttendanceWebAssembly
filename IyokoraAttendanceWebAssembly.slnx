@@ -1,3 +1,4 @@
 <Solution>
+  <Project Path="IyokoraAttendanceWebAssembly.Tests/IyokoraAttendanceWebAssembly.Tests.csproj" />
   <Project Path="IyokoraAttendanceWebAssembly/IyokoraAttendanceWebAssembly.csproj" />
 </Solution>
