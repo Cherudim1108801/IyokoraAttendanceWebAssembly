@@ -16,9 +16,13 @@
 
     @if (_nextPractice is not null)
     {
-        <div class="highlight-card">
+        <div class="highlight-card" style="cursor:pointer;" @onclick="OpenTimelineModal">
             <div class="highlight-card-label">次回の練習</div>
             <div class="highlight-card-date">@_nextPractice.Date.ToString("yyyy年M月d日(ddd)")</div>
+            @if (!string.IsNullOrEmpty(_nextPractice.TimeRangeSummary))
+            {
+                <div>🕒 @_nextPractice.TimeRangeSummary</div>
+            }
             @if (!string.IsNullOrEmpty(_nextPractice.Title))
             {
                 <div>@_nextPractice.Title</div>
@@ -27,17 +31,18 @@
             {
                 <div style="color:#6E6E6E;">📍 @_nextPractice.Place</div>
             }
+            <div class="hint-text" style="margin:6px 0 0;">タップしてタイムスケジュールを見る</div>
+        </div>
+
+        <div class="section">
+            <h3 class="section-title">あなたの出欠</h3>
+            <AttendanceButtons Status="_myStatus" StatusChanged="SetMyStatusAsync" />
         </div>
 
         <PartSummaryPanel Summaries="_partSummaries" />
 
         <p style="font-weight:bold;margin:4px 0 0;">合計 参加予定: @_totalAttending 人</p>
         <p class="hint-text">回答済み: @_totalResponded 人 (登録メンバー全 @_totalMembers 人)</p>
-
-        <div class="section">
-            <h3 class="section-title">あなたの出欠</h3>
-            <AttendanceButtons Status="_myStatus" StatusChanged="SetMyStatusAsync" />
-        </div>
     }
     else if (!_isBusy)
     {
@@ -56,10 +61,46 @@
     }
 </div>
 
+@if (_isTimelineModalVisible && _nextPractice is not null)
+{
+    <div class="iyk-modal-backdrop" @onclick="CloseTimelineModal">
+        <div class="iyk-modal-panel" @onclick:stopPropagation="true">
+            <div class="iyk-modal-title">@_nextPractice.Date.ToString("yyyy年M月d日(ddd)")</div>
+            @if (!string.IsNullOrEmpty(_nextPractice.TimeRangeSummary))
+            {
+                <div class="iyk-modal-sub">🕒 @_nextPractice.TimeRangeSummary</div>
+            }
+            <hr class="divider" />
+            <h3 class="section-title">タイムスケジュール</h3>
+            @if (_nextPractice.TimelineItems.Count == 0)
+            {
+                <p class="hint-text">タイムスケジュールは登録されていません。</p>
+            }
+            else
+            {
+                @foreach (var item in _nextPractice.TimelineItems.OrderBy(i => i.StartTime))
+                {
+                    <div class="list-card">
+                        <div>
+                            <p class="list-card-title">@item.StartTime 〜 @item.EndTime</p>
+                            @if (!string.IsNullOrEmpty(item.Content))
+                            {
+                                <p class="list-card-sub">@item.Content</p>
+                            }
+                        </div>
+                    </div>
+                }
+            }
+            <button class="iyk-btn iyk-btn-block" style="margin-top:8px;" @onclick="CloseTimelineModal">閉じる</button>
+        </div>
+    </div>
+}
+
 @code {
     private List<PartSummary> _partSummaries = [];
     private Practice? _nextPractice;
     private AttendanceStatus _myStatus = AttendanceStatus.Undecided;
+    private bool _isTimelineModalVisible;
     private int _totalAttending;
     private int _totalMembers;
     private int _totalResponded;
@@ -151,4 +192,8 @@
             _errorMessage = $"更新に失敗しました。({ex.Message})";
         }
     }
+
+    private void OpenTimelineModal() => _isTimelineModalVisible = true;
+
+    private void CloseTimelineModal() => _isTimelineModalVisible = false;
 }

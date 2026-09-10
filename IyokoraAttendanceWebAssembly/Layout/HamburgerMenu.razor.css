@@ -1,0 +1,72 @@
+.hamburger-button {
+    position: absolute;
+    top: max(12px, env(safe-area-inset-top, 0px));
+    left: 12px;
+    z-index: 30;
+    width: 40px;
+    height: 40px;
+    border: none;
+    border-radius: 8px;
+    background: #ffffff;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+}
+
+.hamburger-icon {
+    font-size: 20px;
+    line-height: 1;
+}
+
+.hamburger-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.3);
+    z-index: 25;
+}
+
+.hamburger-menu {
+    position: absolute;
+    top: calc(max(12px, env(safe-area-inset-top, 0px)) + 48px);
+    left: 12px;
+    z-index: 30;
+    background: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    min-width: 170px;
+}
+
+.hamburger-menu ::deep .hamburger-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    text-decoration: none;
+    color: #333333;
+    border-radius: 8px;
+    font-size: 14px;
+}
+
+.hamburger-menu ::deep .hamburger-menu-item.active {
+    color: #512BD4;
+    font-weight: bold;
+}
+
+.hamburger-menu ::deep .hamburger-menu-icon {
+    font-size: 18px;
+    line-height: 1;
+}
+
+.hamburger-menu ::deep .hamburger-menu-icon-img {
+    width: 18px;
+    height: 18px;
+    object-fit: contain;
+    border-radius: 4px;
+    flex-shrink: 0;
+}

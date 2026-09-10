@@ -1,0 +1,44 @@
+@namespace IyokoraAttendanceWebAssembly.Layout
+
+<button class="hamburger-button" @onclick="ToggleMenu" aria-label="メニュー">
+    <span class="hamburger-icon">☰</span>
+</button>
+
+@if (_isOpen)
+{
+    <div class="hamburger-backdrop" @onclick="CloseMenu"></div>
+    <nav class="hamburger-menu">
+        <NavLink class="hamburger-menu-item" href="" Match="NavLinkMatch.All" @onclick="CloseMenu">
+            <img class="hamburger-menu-icon-img" src="images/iyokora-logo.png" alt="" />
+            <span>ホーム</span>
+        </NavLink>
+        <NavLink class="hamburger-menu-item" href="schedule" @onclick="CloseMenu">
+            <span class="hamburger-menu-icon">🗓️</span>
+            <span>予定</span>
+        </NavLink>
+        <NavLink class="hamburger-menu-item" href="history" @onclick="CloseMenu">
+            <span class="hamburger-menu-icon">🕘</span>
+            <span>履歴</span>
+        </NavLink>
+        <NavLink class="hamburger-menu-item" href="recordings" @onclick="CloseMenu">
+            <span class="hamburger-menu-icon">🎵</span>
+            <span>音源</span>
+        </NavLink>
+        <NavLink class="hamburger-menu-item" href="pieces" @onclick="CloseMenu">
+            <span class="hamburger-menu-icon">🎼</span>
+            <span>曲</span>
+        </NavLink>
+        <NavLink class="hamburger-menu-item" href="profile" @onclick="CloseMenu">
+            <span class="hamburger-menu-icon">👤</span>
+            <span>プロフィール</span>
+        </NavLink>
+    </nav>
+}
+
+@code {
+    private bool _isOpen;
+
+    private void ToggleMenu() => _isOpen = !_isOpen;
+
+    private void CloseMenu() => _isOpen = false;
+}
