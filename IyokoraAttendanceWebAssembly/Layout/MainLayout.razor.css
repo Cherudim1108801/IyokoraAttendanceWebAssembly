@@ -15,3 +15,7 @@
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
 }
+
+.app-main.app-main-with-menu {
+    padding-top: 52px;
+}

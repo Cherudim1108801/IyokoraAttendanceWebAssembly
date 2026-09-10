@@ -117,6 +117,7 @@ html, body {
 .field input[type=text],
 .field input[type=url],
 .field input[type=date],
+.field input[type=time],
 .field select {
     width: 100%;
     padding: 10px;
@@ -124,6 +125,16 @@ html, body {
     border-radius: 8px;
     font-size: 15px;
     box-sizing: border-box;
+}
+
+/* iOS Safari can size <input type="date"/"time"> using an internal -webkit-min-logical-width
+   that ignores the width set above, letting the control overflow its card on narrow screens
+   (seen on iPhone 16e). Overriding it back to 0 makes the control respect the CSS width. */
+.field input[type=date],
+.field input[type=time] {
+    min-width: 0;
+    max-width: 100%;
+    -webkit-min-logical-width: 0 !important;
 }
 
 .checkbox-row {

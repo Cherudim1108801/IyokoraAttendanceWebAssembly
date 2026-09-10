@@ -4,14 +4,14 @@
 @implements IDisposable
 
 <div class="app-shell">
-    <main class="app-main">
-        @Body
-    </main>
-
     @if (_showNav)
     {
-        <BottomNav />
+        <HamburgerMenu />
     }
+
+    <main class="app-main @(_showNav ? "app-main-with-menu" : "")">
+        @Body
+    </main>
 </div>
 
 @code {
