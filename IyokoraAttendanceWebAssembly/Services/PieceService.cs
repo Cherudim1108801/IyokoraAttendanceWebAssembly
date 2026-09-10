@@ -3,7 +3,7 @@ using IyokoraAttendanceWebAssembly.Models;
 namespace IyokoraAttendanceWebAssembly.Services;
 
 /// <summary>Firestore の <c>pieces</c> コレクションに対する練習曲（レパートリー）の取得・作成・削除を担う。</summary>
-public class PieceService(FirestoreClient client)
+public class PieceService(IFirestoreClient client)
 {
     private const string Collection = "pieces";
 

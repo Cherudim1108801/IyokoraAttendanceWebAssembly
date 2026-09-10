@@ -3,7 +3,7 @@ using IyokoraAttendanceWebAssembly.Models;
 namespace IyokoraAttendanceWebAssembly.Services;
 
 /// <summary>Firestore の <c>practices</c> コレクションに対する練習予定の取得・作成・削除を担う。</summary>
-public class PracticeService(FirestoreClient client)
+public class PracticeService(IFirestoreClient client)
 {
     private const string Collection = "practices";
 
