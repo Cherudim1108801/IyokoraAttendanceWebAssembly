@@ -27,4 +27,7 @@ public static class RoleExtensions
         Role.GeneralMember,
         Role.Admin
     ];
+
+    /// <summary>練習予定の追加ができる役割かどうか（管理者のみ）。</summary>
+    public static bool CanRegisterSchedule(this Role role) => role == Role.Admin;
 }

@@ -108,7 +108,13 @@
                     <div style="display:flex;align-items:center;justify-content:space-between;">
                         @if (_practice.KeyPickedUp)
                         {
-                            <span style="color:#3EC1A4;font-weight:bold;">受け取り済み</span>
+                            <span style="color:#3EC1A4;font-weight:bold;">
+                                受け取り済み
+                                @if (!string.IsNullOrEmpty(_practice.KeyPickedUpByName))
+                                {
+                                    @($"（{_practice.KeyPickedUpByName}）")
+                                }
+                            </span>
                             <button class="iyk-btn-text" @onclick="ToggleKeyPickedUpAsync">未受け取りに戻す</button>
                         }
                         else
@@ -155,7 +161,7 @@
             _practice = await PracticeService.GetByIdAsync(PracticeId);
             _isAttendanceEditable = _practice is null || _practice.Date.Date >= DateTime.Today;
             var members = await MemberService.GetAllAsync();
-            var pieces = await PieceService.GetAllAsync();
+            var pieces = await PieceService.GetAllAsync(includeArchived: true);
             var attendances = await AttendanceService.GetForPracticeAsync(PracticeId);
             var statusByMemberId = attendances.ToDictionary(a => a.MemberId, a => a.Status);
 
@@ -323,7 +329,7 @@
 
         try
         {
-            await PracticeService.SetKeyPickedUpAsync(_practice.Id, !_practice.KeyPickedUp);
+            await PracticeService.SetKeyPickedUpAsync(_practice.Id, !_practice.KeyPickedUp, Profile.Name);
             await LoadAsync();
         }
         catch (Exception ex)
