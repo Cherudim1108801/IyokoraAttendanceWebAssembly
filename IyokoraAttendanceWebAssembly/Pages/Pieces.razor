@@ -38,6 +38,11 @@
         </div>
     }
 
+    <div class="checkbox-row" style="margin-top:10px;">
+        <input type="checkbox" id="showArchived" @bind="_showArchived" @bind:after="LoadAsync" />
+        <label for="showArchived">取り組みが終わった曲（非表示）も表示する</label>
+    </div>
+
     @if (!string.IsNullOrEmpty(_errorMessage))
     {
         <p class="error-text">@_errorMessage</p>
@@ -57,11 +62,25 @@
         {
             <div class="list-card">
                 <div>
-                    <p class="list-card-title">@piece.Title</p>
+                    <p class="list-card-title">
+                        @piece.Title
+                        @if (piece.IsArchived)
+                        {
+                            <span class="hint-text">（非表示）</span>
+                        }
+                    </p>
                     <p class="list-card-sub">@piece.PartsSummary</p>
                 </div>
                 @if (Profile.Role == Role.Admin)
                 {
+                    @if (piece.IsArchived)
+                    {
+                        <button class="iyk-btn-text" @onclick="() => SetArchivedAsync(piece, false)">再表示する</button>
+                    }
+                    else
+                    {
+                        <button class="iyk-btn-text" @onclick="() => SetArchivedAsync(piece, true)">非表示にする</button>
+                    }
                     <button class="iyk-btn-text-danger" @onclick="() => DeletePieceAsync(piece)">削除</button>
                 }
             </div>
@@ -77,6 +96,7 @@
     private readonly List<PartDivision> _divisionOptions = PartDivisionExtensions.All.ToList();
     private bool _isAddPanelVisible;
     private string _newTitle = string.Empty;
+    private bool _showArchived;
     private bool _isBusy;
     private string? _errorMessage;
 
@@ -88,7 +108,7 @@
         _errorMessage = null;
         try
         {
-            _pieces = await PieceService.GetAllAsync();
+            _pieces = await PieceService.GetAllAsync(includeArchived: _showArchived);
         }
         catch (Exception ex)
         {
@@ -136,6 +156,22 @@
         catch (Exception ex)
         {
             _errorMessage = $"曲の追加に失敗しました。({ex.Message})";
+        }
+    }
+
+    private async Task SetArchivedAsync(Piece piece, bool isArchived)
+    {
+        if (Profile.Role != Role.Admin)
+            return;
+
+        try
+        {
+            await PieceService.SetArchivedAsync(piece.Id, isArchived);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"更新に失敗しました。({ex.Message})";
         }
     }
 

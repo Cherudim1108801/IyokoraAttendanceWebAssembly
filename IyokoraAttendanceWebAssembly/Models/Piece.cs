@@ -15,6 +15,9 @@ public class Piece
     /// <summary>登録日時（UTC）。</summary>
     public DateTime CreatedAt { get; set; }
 
+    /// <summary>取り組みが終わり、曲一覧から非表示にされているかどうか。</summary>
+    public bool IsArchived { get; set; }
+
     /// <summary>一覧表示用：割り振り済みパートを読点区切りで結合した文字列。</summary>
     public string PartsSummary => PartAssignments.Count == 0
         ? "パート未設定"

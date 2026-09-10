@@ -137,15 +137,17 @@ public class PracticeService(FirestoreClient client)
         await client.UpsertDocumentAsync(Collection, practiceId, fields, ct);
     }
 
-    /// <summary>指定の練習の鍵の受け取り状況を設定する。</summary>
+    /// <summary>指定の練習の鍵の受け取り状況を設定する。受け取り済みにする場合は、受け取ったメンバーの名前を記録する。</summary>
     /// <param name="practiceId">練習予定ID。</param>
     /// <param name="keyPickedUp">受け取り済みかどうか。</param>
+    /// <param name="memberName">受け取ったメンバーの表示名。<paramref name="keyPickedUp"/> が true の場合に記録する。</param>
     /// <param name="ct">キャンセルトークン。</param>
-    public async Task SetKeyPickedUpAsync(string practiceId, bool keyPickedUp, CancellationToken ct = default)
+    public async Task SetKeyPickedUpAsync(string practiceId, bool keyPickedUp, string memberName, CancellationToken ct = default)
     {
         var fields = new Dictionary<string, object?>
         {
-            ["keyPickedUp"] = keyPickedUp
+            ["keyPickedUp"] = keyPickedUp,
+            ["keyPickedUpByName"] = keyPickedUp ? memberName : null
         };
         await client.UpsertDocumentAsync(Collection, practiceId, fields, ct);
     }
@@ -173,7 +175,8 @@ public class PracticeService(FirestoreClient client)
             .ToList(),
         CreatedAt = doc.GetDateTime("createdAt"),
         RequiresKeyPickup = doc.GetBool("requiresKeyPickup"),
-        KeyPickedUp = doc.GetBool("keyPickedUp")
+        KeyPickedUp = doc.GetBool("keyPickedUp"),
+        KeyPickedUpByName = doc.GetString("keyPickedUpByName")
     };
 
     private static PracticePieceRef ToPieceRef(Dictionary<string, object?> fields) => new()
