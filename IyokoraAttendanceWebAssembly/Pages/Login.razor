@@ -1,0 +1,80 @@
+@page "/login"
+@using IyokoraAttendanceWebAssembly.Services
+@inject MemberService MemberService
+@inject LocalProfileStore Profile
+@inject NavigationManager Nav
+
+<div class="page-pad" style="display:flex;flex-direction:column;justify-content:center;min-height:100%;">
+
+    <h1 style="text-align:center;font-size:28px;font-weight:bold;">IDログイン</h1>
+    <p style="text-align:center;font-size:14px;color:#6E6E6E;">
+        他の端末で登録したときに発行された、ログインIDを入力してください。
+    </p>
+
+    <div class="field" style="margin-top:16px;">
+        <label>ログインID</label>
+        <input type="text" placeholder="例：@(FirebaseOptions.LoginIdPrefix)1234" @bind="_loginId" @bind:event="oninput" />
+    </div>
+
+    @if (!string.IsNullOrEmpty(_errorMessage))
+    {
+        <p class="error-text">@_errorMessage</p>
+    }
+
+    <button class="iyk-btn iyk-btn-primary iyk-btn-block" style="margin-top:16px;" disabled="@_isBusy" @onclick="LoginAsync">
+        ログイン
+    </button>
+
+    @if (_isBusy)
+    {
+        <p class="hint-text" style="text-align:center;margin-top:10px;">確認中...</p>
+    }
+
+    <p class="hint-text" style="text-align:center;margin-top:20px;">
+        初めての方は <a href="onboarding">こちら</a> から登録してください。
+    </p>
+</div>
+
+@code {
+    private string _loginId = string.Empty;
+    private string? _errorMessage;
+    private bool _isBusy;
+
+    private async Task LoginAsync()
+    {
+        var normalized = LoginIdGenerator.Normalize(_loginId);
+        if (!LoginIdGenerator.IsValidFormat(normalized))
+        {
+            _errorMessage = $"IDの形式が正しくありません。（例：{FirebaseOptions.LoginIdPrefix}1234）";
+            return;
+        }
+
+        _isBusy = true;
+        _errorMessage = null;
+        try
+        {
+            var member = await MemberService.FindByLoginIdAsync(normalized);
+            if (member is null)
+            {
+                _errorMessage = "該当するIDが見つかりませんでした。入力内容をご確認ください。";
+                return;
+            }
+
+            Profile.MemberId = member.Id;
+            Profile.Name = member.Name;
+            Profile.Part = member.Part;
+            Profile.Role = member.Role;
+            Profile.PieceParts = member.PieceParts;
+            Profile.LoginId = member.LoginId;
+            Nav.NavigateTo("/");
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"ログインに失敗しました。ネットワーク接続と Firebase 設定を確認してください。({ex.Message})";
+        }
+        finally
+        {
+            _isBusy = false;
+        }
+    }
+}

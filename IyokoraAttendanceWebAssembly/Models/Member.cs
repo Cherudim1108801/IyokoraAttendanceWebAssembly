@@ -9,6 +9,12 @@ public class Member
     /// <summary>表示名。</summary>
     public required string Name { get; set; }
 
+    /// <summary>
+    /// 複数端末から同じアカウントを使うためのログインID（団体ごとのアルファベット prefix + 数字4桁）。
+    /// <see cref="Services.LoginIdGenerator"/> 参照。
+    /// </summary>
+    public required string LoginId { get; set; }
+
     /// <summary>所属パート。</summary>
     public required PartType Part { get; set; }
 

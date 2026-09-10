@@ -28,16 +28,16 @@
     private void CheckRegistration()
     {
         var path = Nav.ToBaseRelativePath(Nav.Uri).ToLowerInvariant();
-        var isOnboarding = path.StartsWith("onboarding", StringComparison.Ordinal);
+        var isAuthPage = path.StartsWith("onboarding", StringComparison.Ordinal) || path.StartsWith("login", StringComparison.Ordinal);
 
-        if (!Profile.IsRegistered && !isOnboarding)
+        if (!Profile.IsRegistered && !isAuthPage)
         {
             Nav.NavigateTo("onboarding");
             _showNav = false;
         }
         else
         {
-            _showNav = !isOnboarding;
+            _showNav = !isAuthPage;
         }
 
         StateHasChanged();

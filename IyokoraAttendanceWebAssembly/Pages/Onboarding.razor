@@ -5,6 +5,8 @@
 
 <div class="page-pad" style="display:flex;flex-direction:column;justify-content:center;min-height:100%;">
 
+@if (_assignedLoginId is null)
+{
     <h1 style="text-align:center;font-size:28px;font-weight:bold;">ようこそ</h1>
     <p style="text-align:center;font-size:14px;color:#6E6E6E;">
         出席管理アプリを使うために、表示名とパートを登録してください。
@@ -38,6 +40,28 @@
     {
         <p class="hint-text" style="text-align:center;margin-top:10px;">保存中...</p>
     }
+
+    <p class="hint-text" style="text-align:center;margin-top:20px;">
+        他の端末で登録済みの方は <a href="login">こちら</a> からログインできます。
+    </p>
+}
+else
+{
+    <h1 style="text-align:center;font-size:24px;font-weight:bold;">登録が完了しました</h1>
+    <p style="text-align:center;font-size:14px;color:#6E6E6E;">
+        以下のログインIDを控えておいてください。<br />
+        他の端末でこのアプリを使うときに、このIDでログインできます。
+    </p>
+
+    <div class="highlight-card" style="text-align:center;margin-top:16px;">
+        <div class="highlight-card-label">あなたのログインID</div>
+        <div style="font-size:28px;font-weight:bold;letter-spacing:2px;">@_assignedLoginId</div>
+    </div>
+
+    <button class="iyk-btn iyk-btn-primary iyk-btn-block" style="margin-top:16px;" @onclick='() => Nav.NavigateTo("/")'>
+        はじめる
+    </button>
+}
 </div>
 
 @code {
@@ -45,6 +69,7 @@
     private string _name = string.Empty;
     private PartType _selectedPart;
     private string? _errorMessage;
+    private string? _assignedLoginId;
     private bool _isBusy;
 
     protected override void OnInitialized()
@@ -68,8 +93,9 @@
         {
             Profile.Name = trimmedName;
             Profile.Part = _selectedPart;
-            await MemberService.SaveAsync(Profile.MemberId, trimmedName, _selectedPart, Profile.Role, []);
-            Nav.NavigateTo("/");
+            var loginId = await MemberService.SaveAsync(Profile.MemberId, trimmedName, _selectedPart, Profile.Role, [], Profile.LoginId);
+            Profile.LoginId = loginId;
+            _assignedLoginId = loginId;
         }
         catch (Exception ex)
         {
