@@ -13,10 +13,11 @@ public class PieceService(FirestoreClient client)
     public async Task<List<Piece>> GetAllAsync(bool includeArchived = false, CancellationToken ct = default)
     {
         var docs = await client.ListDocumentsAsync(Collection, ct);
-        return docs
+        var pieces = docs
             .Where(d => d.GetString("groupId") == FirebaseOptions.GroupId)
-            .Where(d => includeArchived || !d.GetBool("isArchived"))
-            .Select(ToPiece)
+            .Select(ToPiece);
+
+        return PieceVisibility.Filter(pieces, includeArchived)
             .OrderBy(p => p.Title, StringComparer.CurrentCultureIgnoreCase)
             .ToList();
     }

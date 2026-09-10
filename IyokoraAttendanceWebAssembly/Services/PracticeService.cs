@@ -147,7 +147,7 @@ public class PracticeService(FirestoreClient client)
         var fields = new Dictionary<string, object?>
         {
             ["keyPickedUp"] = keyPickedUp,
-            ["keyPickedUpByName"] = keyPickedUp ? memberName : null
+            ["keyPickedUpByName"] = KeyPickupRecorder.ResolveRecordedName(keyPickedUp, memberName)
         };
         await client.UpsertDocumentAsync(Collection, practiceId, fields, ct);
     }

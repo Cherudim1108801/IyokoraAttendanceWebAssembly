@@ -17,4 +17,12 @@ public class RoleExtensionsTests
     {
         Assert.Equal([Role.GeneralMember, Role.Admin], RoleExtensions.All);
     }
+
+    [Theory]
+    [InlineData(Role.Admin, true)]
+    [InlineData(Role.GeneralMember, false)]
+    public void 練習予定の追加ができるのは管理者のみである(Role role, bool expected)
+    {
+        Assert.Equal(expected, role.CanRegisterSchedule());
+    }
 }

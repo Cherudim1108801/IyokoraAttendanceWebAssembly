@@ -43,7 +43,7 @@
     {
         <div class="highlight-card">
             <p style="font-weight:bold;margin:0 0 10px;">次回の練習予定が登録されていません</p>
-            @if (Profile.Role == Role.Admin)
+            @if (Profile.Role.CanRegisterSchedule())
             {
                 <button class="iyk-btn iyk-btn-primary" @onclick='() => Nav.NavigateTo("schedule")'>予定を登録する</button>
             }
