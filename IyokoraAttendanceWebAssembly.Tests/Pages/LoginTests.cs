@@ -1,34 +1,17 @@
 using Bunit;
-using IyokoraAttendanceWebAssembly.Models;
 using IyokoraAttendanceWebAssembly.Pages;
 using IyokoraAttendanceWebAssembly.Services;
 using IyokoraAttendanceWebAssembly.Tests.TestSupport;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
-using Moq;
 
 namespace IyokoraAttendanceWebAssembly.Tests.Pages;
 
 public class LoginTests : TestContext
 {
-    private static FirestoreDocument CreateMemberDoc(string id, string name, string loginId) => new()
+    private LocalProfileStore RegisterServices(FakeFirestoreClient? client = null)
     {
-        Id = id,
-        Fields = new Dictionary<string, object?>
-        {
-            ["groupId"] = FirebaseOptions.GroupId,
-            ["name"] = name,
-            ["part"] = PartType.Soprano.ToString(),
-            ["role"] = Role.GeneralMember.ToString(),
-            ["loginId"] = loginId,
-            ["pieceParts"] = new List<object?>(),
-            ["updatedAt"] = DateTime.UtcNow
-        }
-    };
-
-    private LocalProfileStore RegisterServices(IEnumerable<FirestoreDocument>? docs = null)
-    {
-        Services.AddSingleton(FakeMemberService.Create(docs));
+        Services.AddSingleton(FakeMemberService.Create(client));
         var profile = new LocalProfileStore(FakeLocalStorage.Create());
         Services.AddSingleton(profile);
         return profile;
@@ -61,8 +44,9 @@ public class LoginTests : TestContext
     [Fact]
     public void 有効なログインIDを入力すると端末にプロフィールが保存されトップページへ遷移する()
     {
-        var docs = new[] { CreateMemberDoc("m1", "山田 太郎", "IK1234") };
-        var profile = RegisterServices(docs);
+        var client = new FakeFirestoreClient();
+        client.Seed("members", "m1", Seed.Member("山田 太郎", loginId: "IK1234"));
+        var profile = RegisterServices(client);
         var cut = RenderComponent<Login>();
 
         cut.Find("input").Input("ik1234");
