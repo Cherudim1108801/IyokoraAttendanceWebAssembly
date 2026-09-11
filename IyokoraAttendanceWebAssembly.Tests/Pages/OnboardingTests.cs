@@ -7,7 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace IyokoraAttendanceWebAssembly.Tests.Pages;
 
-public class OnboardingTests : TestContext
+public class OnboardingTests : BunitContext
 {
     private LocalProfileStore RegisterServices()
     {
@@ -21,7 +21,7 @@ public class OnboardingTests : TestContext
     public void 名前が未入力の場合は保存されずエラーメッセージが表示される()
     {
         RegisterServices();
-        var cut = RenderComponent<Onboarding>();
+        var cut = Render<Onboarding>();
 
         cut.Find("button.iyk-btn-primary").Click();
 
@@ -32,7 +32,7 @@ public class OnboardingTests : TestContext
     public void 名前とパートを入力して登録するとログインIDが発行され完了画面が表示される()
     {
         var profile = RegisterServices();
-        var cut = RenderComponent<Onboarding>();
+        var cut = Render<Onboarding>();
 
         cut.Find("input").Input("山田 太郎");
         cut.Find("select").Change(PartType.Alto.ToString());
@@ -49,7 +49,7 @@ public class OnboardingTests : TestContext
     public void 前後の空白のみの名前は未入力として扱われる()
     {
         RegisterServices();
-        var cut = RenderComponent<Onboarding>();
+        var cut = Render<Onboarding>();
 
         cut.Find("input").Input("   ");
         cut.Find("button.iyk-btn-primary").Click();

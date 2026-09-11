@@ -8,7 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace IyokoraAttendanceWebAssembly.Tests.Pages;
 
-public class PracticeHistoryTests : TestContext
+public class PracticeHistoryTests : BunitContext
 {
     private FakeFirestoreClient RegisterServices(Role role = Role.GeneralMember)
     {
@@ -25,7 +25,7 @@ public class PracticeHistoryTests : TestContext
     {
         RegisterServices();
 
-        var cut = RenderComponent<PracticeHistory>();
+        var cut = Render<PracticeHistory>();
 
         Assert.Contains("過去の練習データはありません", cut.Find("p.empty-text").TextContent);
     }
@@ -38,7 +38,7 @@ public class PracticeHistoryTests : TestContext
         client.Seed("practices", "recent", Seed.Practice(DateTime.Today.AddDays(-1), title: "最近の練習"));
         client.Seed("practices", "future", Seed.Practice(DateTime.Today.AddDays(5), title: "未来の練習"));
 
-        var cut = RenderComponent<PracticeHistory>();
+        var cut = Render<PracticeHistory>();
 
         var titles = cut.FindAll("p.list-card-title").Select(e => e.TextContent).ToList();
         Assert.DoesNotContain(titles, t => t.Contains("未来"));
@@ -53,7 +53,7 @@ public class PracticeHistoryTests : TestContext
         var client = RegisterServices(Role.GeneralMember);
         client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(-1)));
 
-        var cut = RenderComponent<PracticeHistory>();
+        var cut = Render<PracticeHistory>();
 
         Assert.Empty(cut.FindAll("button.iyk-btn-text-danger"));
     }
@@ -64,7 +64,7 @@ public class PracticeHistoryTests : TestContext
         var client = RegisterServices(Role.Admin);
         client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(-1), title: "削除対象"));
 
-        var cut = RenderComponent<PracticeHistory>();
+        var cut = Render<PracticeHistory>();
         cut.Find("button.iyk-btn-text-danger").Click();
 
         Assert.Empty(cut.FindAll("div.list-card"));
@@ -77,7 +77,7 @@ public class PracticeHistoryTests : TestContext
         var client = RegisterServices();
         client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(-1)));
 
-        var cut = RenderComponent<PracticeHistory>();
+        var cut = Render<PracticeHistory>();
         cut.Find("div.list-card").Click();
 
         var nav = Services.GetRequiredService<NavigationManager>();

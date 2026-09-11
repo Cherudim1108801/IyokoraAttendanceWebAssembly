@@ -7,7 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace IyokoraAttendanceWebAssembly.Tests.Pages;
 
-public class SchedulePollTests : TestContext
+public class SchedulePollTests : BunitContext
 {
     private FakeFirestoreClient RegisterServices(Role role = Role.GeneralMember)
     {
@@ -28,7 +28,7 @@ public class SchedulePollTests : TestContext
         var client = RegisterServices(Role.GeneralMember);
         client.Seed("scheduleCandidates", "c1", Seed.ScheduleCandidate(DateTime.Today.AddDays(3), TimeOfDay.Morning));
 
-        var cut = RenderComponent<SchedulePoll>();
+        var cut = Render<SchedulePoll>();
 
         Assert.Empty(cut.FindAll("button.iyk-btn-primary"));
         Assert.Empty(cut.FindAll("button.iyk-btn-text-danger"));
@@ -39,7 +39,7 @@ public class SchedulePollTests : TestContext
     {
         RegisterServices(Role.Admin);
 
-        var cut = RenderComponent<SchedulePoll>();
+        var cut = Render<SchedulePoll>();
 
         Assert.Contains("登録されている日程候補はありません", cut.Markup);
     }
@@ -48,7 +48,7 @@ public class SchedulePollTests : TestContext
     public void 管理者が候補日を追加すると一覧に反映される()
     {
         RegisterServices(Role.Admin);
-        var cut = RenderComponent<SchedulePoll>();
+        var cut = Render<SchedulePoll>();
 
         cut.Find("button.iyk-btn-primary").Click();
         cut.Find("div.highlight-card button.iyk-btn-primary").Click();
@@ -63,7 +63,7 @@ public class SchedulePollTests : TestContext
         var client = RegisterServices();
         client.Seed("scheduleCandidates", "c1", Seed.ScheduleCandidate(DateTime.Today.AddDays(3), TimeOfDay.Morning));
 
-        var cut = RenderComponent<SchedulePoll>();
+        var cut = Render<SchedulePoll>();
         cut.Find("button.attend-yes").Click();
 
         Assert.Contains("selected", cut.Find("button.attend-yes").GetAttribute("class"));
@@ -78,7 +78,7 @@ public class SchedulePollTests : TestContext
         var client = RegisterServices(Role.Admin);
         client.Seed("scheduleCandidates", "c1", Seed.ScheduleCandidate(DateTime.Today.AddDays(3), TimeOfDay.Morning));
 
-        var cut = RenderComponent<SchedulePoll>();
+        var cut = Render<SchedulePoll>();
         cut.Find("button.iyk-btn-text-danger").Click();
 
         Assert.Empty(cut.FindAll("div.list-card"));
