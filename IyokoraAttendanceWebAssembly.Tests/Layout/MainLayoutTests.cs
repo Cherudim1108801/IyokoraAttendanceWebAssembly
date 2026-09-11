@@ -7,7 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace IyokoraAttendanceWebAssembly.Tests.Layout;
 
-public class MainLayoutTests : TestContext
+public class MainLayoutTests : BunitContext
 {
     private void RegisterProfile(bool isRegistered)
     {
@@ -25,7 +25,7 @@ public class MainLayoutTests : TestContext
     {
         RegisterProfile(isRegistered: false);
 
-        var cut = RenderComponent<MainLayout>(p => p.Add(x => x.Body, EmptyBody));
+        var cut = Render<MainLayout>(p => p.Add(x => x.Body, EmptyBody));
 
         var nav = Services.GetRequiredService<NavigationManager>();
         Assert.EndsWith("onboarding", nav.Uri);
@@ -37,7 +37,7 @@ public class MainLayoutTests : TestContext
     {
         RegisterProfile(isRegistered: true);
 
-        var cut = RenderComponent<MainLayout>(p => p.Add(x => x.Body, EmptyBody));
+        var cut = Render<MainLayout>(p => p.Add(x => x.Body, EmptyBody));
 
         var nav = Services.GetRequiredService<NavigationManager>();
         Assert.DoesNotContain("onboarding", nav.Uri);
@@ -52,7 +52,7 @@ public class MainLayoutTests : TestContext
         var nav = Services.GetRequiredService<NavigationManager>();
         nav.NavigateTo("onboarding");
 
-        var cut = RenderComponent<MainLayout>(p => p.Add(x => x.Body, EmptyBody));
+        var cut = Render<MainLayout>(p => p.Add(x => x.Body, EmptyBody));
 
         Assert.EndsWith("onboarding", nav.Uri);
         Assert.Empty(cut.FindAll("button.hamburger-button"));

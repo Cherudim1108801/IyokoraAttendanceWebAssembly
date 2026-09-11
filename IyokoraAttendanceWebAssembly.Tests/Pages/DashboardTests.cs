@@ -7,7 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace IyokoraAttendanceWebAssembly.Tests.Pages;
 
-public class DashboardTests : TestContext
+public class DashboardTests : BunitContext
 {
     private (FakeFirestoreClient client, LocalProfileStore profile) RegisterServices(Role role = Role.GeneralMember)
     {
@@ -29,7 +29,7 @@ public class DashboardTests : TestContext
     {
         RegisterServices();
 
-        var cut = RenderComponent<Dashboard>();
+        var cut = Render<Dashboard>();
 
         Assert.Contains("次回の練習予定が登録されていません", cut.Markup);
     }
@@ -39,7 +39,7 @@ public class DashboardTests : TestContext
     {
         RegisterServices(Role.GeneralMember);
 
-        var cut = RenderComponent<Dashboard>();
+        var cut = Render<Dashboard>();
 
         Assert.Empty(cut.FindAll("button.iyk-btn-primary"));
     }
@@ -49,7 +49,7 @@ public class DashboardTests : TestContext
     {
         RegisterServices(Role.Admin);
 
-        var cut = RenderComponent<Dashboard>();
+        var cut = Render<Dashboard>();
 
         Assert.Single(cut.FindAll("button.iyk-btn-primary"));
     }
@@ -63,7 +63,7 @@ public class DashboardTests : TestContext
         client.Seed("members", "m2", Seed.Member("相方", PartType.Soprano));
         client.Seed("attendances", "p1_me", Seed.Attendance("p1", "me", "自分", PartType.Soprano, AttendanceStatus.Attending));
 
-        var cut = RenderComponent<Dashboard>();
+        var cut = Render<Dashboard>();
 
         Assert.Contains("次回練習", cut.Markup);
         Assert.Contains("合計 参加予定: 1 人", cut.Markup);
@@ -77,7 +77,7 @@ public class DashboardTests : TestContext
         client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3)));
         client.Seed("members", "me", Seed.Member("自分", PartType.Soprano));
 
-        var cut = RenderComponent<Dashboard>();
+        var cut = Render<Dashboard>();
         cut.Find("button.attend-yes").Click();
 
         Assert.Contains("合計 参加予定: 1 人", cut.Markup);
@@ -90,7 +90,7 @@ public class DashboardTests : TestContext
         var (client, _) = RegisterServices();
         client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3)));
 
-        var cut = RenderComponent<Dashboard>();
+        var cut = Render<Dashboard>();
         cut.Find("div.highlight-card").Click();
 
         Assert.Contains("タイムスケジュールは登録されていません", cut.Find("div.iyk-modal-panel").TextContent);

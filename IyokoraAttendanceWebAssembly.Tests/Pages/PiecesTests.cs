@@ -7,7 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace IyokoraAttendanceWebAssembly.Tests.Pages;
 
-public class PiecesTests : TestContext
+public class PiecesTests : BunitContext
 {
     private FakeFirestoreClient RegisterServices(Role role = Role.GeneralMember)
     {
@@ -25,7 +25,7 @@ public class PiecesTests : TestContext
         var client = RegisterServices(Role.GeneralMember);
         client.Seed("pieces", "p1", Seed.Piece("曲A"));
 
-        var cut = RenderComponent<Pieces>();
+        var cut = Render<Pieces>();
 
         Assert.Empty(cut.FindAll("button.iyk-btn-primary"));
         Assert.Empty(cut.FindAll("button.iyk-btn-text"));
@@ -37,7 +37,7 @@ public class PiecesTests : TestContext
     {
         RegisterServices(Role.Admin);
 
-        var cut = RenderComponent<Pieces>();
+        var cut = Render<Pieces>();
 
         Assert.Contains("登録されている曲はありません", cut.Markup);
     }
@@ -49,7 +49,7 @@ public class PiecesTests : TestContext
         client.Seed("pieces", "p1", Seed.Piece("表示曲"));
         client.Seed("pieces", "p2", Seed.Piece("非表示曲", isArchived: true));
 
-        var cut = RenderComponent<Pieces>();
+        var cut = Render<Pieces>();
         Assert.DoesNotContain("非表示曲", cut.Markup);
 
         cut.Find("input#showArchived").Change(true);
@@ -61,7 +61,7 @@ public class PiecesTests : TestContext
     public void 管理者が曲名のみで曲を追加すると一覧に反映される()
     {
         RegisterServices(Role.Admin);
-        var cut = RenderComponent<Pieces>();
+        var cut = Render<Pieces>();
 
         cut.Find("button.iyk-btn-primary").Click();
         cut.Find("input[type=text]").Input("新曲A");
@@ -76,7 +76,7 @@ public class PiecesTests : TestContext
     public void 曲名が未入力の場合はエラーが表示され登録されない()
     {
         RegisterServices(Role.Admin);
-        var cut = RenderComponent<Pieces>();
+        var cut = Render<Pieces>();
 
         cut.Find("button.iyk-btn-primary").Click();
         cut.Find("div.highlight-card button.iyk-btn-primary").Click();
@@ -90,7 +90,7 @@ public class PiecesTests : TestContext
         var client = RegisterServices(Role.Admin);
         client.Seed("pieces", "p1", Seed.Piece("曲A"));
 
-        var cut = RenderComponent<Pieces>();
+        var cut = Render<Pieces>();
         cut.Find("input#showArchived").Change(true);
         cut.Find("button.iyk-btn-text").Click();
 
@@ -103,7 +103,7 @@ public class PiecesTests : TestContext
         var client = RegisterServices(Role.Admin);
         client.Seed("pieces", "p1", Seed.Piece("削除対象"));
 
-        var cut = RenderComponent<Pieces>();
+        var cut = Render<Pieces>();
         cut.Find("button.iyk-btn-text-danger").Click();
 
         Assert.Empty(cut.FindAll("div.list-card"));

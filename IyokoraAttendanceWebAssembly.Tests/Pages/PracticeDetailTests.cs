@@ -10,7 +10,7 @@ using Moq;
 
 namespace IyokoraAttendanceWebAssembly.Tests.Pages;
 
-public class PracticeDetailTests : TestContext
+public class PracticeDetailTests : BunitContext
 {
     private (FakeFirestoreClient client, LocalProfileStore profile, Mock<IJSRuntime> js) RegisterServices(Role role = Role.GeneralMember)
     {
@@ -34,7 +34,7 @@ public class PracticeDetailTests : TestContext
     }
 
     private IRenderedComponent<PracticeDetail> Render(string practiceId = "p1") =>
-        RenderComponent<PracticeDetail>(p => p.Add(x => x.PracticeId, practiceId));
+        Render<PracticeDetail>(p => p.Add(x => x.PracticeId, practiceId));
 
     [Fact]
     public void 練習の基本情報と参加予定人数が表示される()

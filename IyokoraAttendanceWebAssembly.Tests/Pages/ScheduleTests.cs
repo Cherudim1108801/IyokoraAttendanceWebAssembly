@@ -8,7 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace IyokoraAttendanceWebAssembly.Tests.Pages;
 
-public class ScheduleTests : TestContext
+public class ScheduleTests : BunitContext
 {
     private FakeFirestoreClient RegisterServices(Role role = Role.GeneralMember)
     {
@@ -27,7 +27,7 @@ public class ScheduleTests : TestContext
         var client = RegisterServices(Role.GeneralMember);
         client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3)));
 
-        var cut = RenderComponent<Schedule>();
+        var cut = Render<Schedule>();
 
         Assert.Empty(cut.FindAll("button.iyk-btn-primary"));
         Assert.Empty(cut.FindAll("button.iyk-btn-text-danger"));
@@ -38,7 +38,7 @@ public class ScheduleTests : TestContext
     {
         RegisterServices(Role.Admin);
 
-        var cut = RenderComponent<Schedule>();
+        var cut = Render<Schedule>();
 
         Assert.Contains("登録されている練習予定はありません", cut.Markup);
     }
@@ -50,7 +50,7 @@ public class ScheduleTests : TestContext
         client.Seed("practices", "past", Seed.Practice(DateTime.Today.AddDays(-1), title: "過去の練習"));
         client.Seed("practices", "future", Seed.Practice(DateTime.Today.AddDays(3), title: "今後の練習"));
 
-        var cut = RenderComponent<Schedule>();
+        var cut = Render<Schedule>();
 
         Assert.DoesNotContain("過去の練習", cut.Markup);
         Assert.Contains("今後の練習", cut.Markup);
@@ -60,7 +60,7 @@ public class ScheduleTests : TestContext
     public void 管理者が日付のみで練習予定を追加すると一覧に反映される()
     {
         var client = RegisterServices(Role.Admin);
-        var cut = RenderComponent<Schedule>();
+        var cut = Render<Schedule>();
 
         cut.Find("button.iyk-btn-primary").Click();
         cut.Find("div.highlight-card button.iyk-btn-primary").Click();
@@ -73,7 +73,7 @@ public class ScheduleTests : TestContext
     public void 開始時刻のみ入力し終了時刻を入力しない場合はエラーが表示される()
     {
         RegisterServices(Role.Admin);
-        var cut = RenderComponent<Schedule>();
+        var cut = Render<Schedule>();
         cut.Find("button.iyk-btn-primary").Click();
 
         cut.FindAll("input[type=time]")[0].Input("10:00:00");
@@ -90,7 +90,7 @@ public class ScheduleTests : TestContext
         var client = RegisterServices();
         client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3)));
 
-        var cut = RenderComponent<Schedule>();
+        var cut = Render<Schedule>();
         cut.Find("div.list-card").Click();
 
         var nav = Services.GetRequiredService<NavigationManager>();
@@ -103,7 +103,7 @@ public class ScheduleTests : TestContext
         var client = RegisterServices(Role.Admin);
         client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3)));
 
-        var cut = RenderComponent<Schedule>();
+        var cut = Render<Schedule>();
         cut.Find("button.iyk-btn-text-danger").Click();
 
         Assert.Empty(cut.FindAll("div.list-card"));

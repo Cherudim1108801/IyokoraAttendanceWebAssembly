@@ -4,12 +4,12 @@ using IyokoraAttendanceWebAssembly.Shared;
 
 namespace IyokoraAttendanceWebAssembly.Tests.Shared;
 
-public class AttendanceButtonsTests : TestContext
+public class AttendanceButtonsTests : BunitContext
 {
     [Fact]
     public void 現在の出欠状態に対応するボタンにselectedクラスが付く()
     {
-        var cut = RenderComponent<AttendanceButtons>(p => p.Add(x => x.Status, AttendanceStatus.Attending));
+        var cut = Render<AttendanceButtons>(p => p.Add(x => x.Status, AttendanceStatus.Attending));
 
         Assert.Contains("selected", cut.Find("button.attend-yes").GetAttribute("class"));
         Assert.DoesNotContain("selected", cut.Find("button.attend-no").GetAttribute("class"));
@@ -19,7 +19,7 @@ public class AttendanceButtonsTests : TestContext
     [Fact]
     public void HideUndecidedがtrueの場合は未定ボタンが表示されない()
     {
-        var cut = RenderComponent<AttendanceButtons>(p => p.Add(x => x.HideUndecided, true));
+        var cut = Render<AttendanceButtons>(p => p.Add(x => x.HideUndecided, true));
 
         Assert.Empty(cut.FindAll("button.attend-undecided"));
     }
@@ -27,7 +27,7 @@ public class AttendanceButtonsTests : TestContext
     [Fact]
     public void Disabledがtrueの場合は全ボタンが無効化される()
     {
-        var cut = RenderComponent<AttendanceButtons>(p => p.Add(x => x.Disabled, true));
+        var cut = Render<AttendanceButtons>(p => p.Add(x => x.Disabled, true));
 
         Assert.True(cut.Find("button.attend-yes").HasAttribute("disabled"));
         Assert.True(cut.Find("button.attend-no").HasAttribute("disabled"));
@@ -42,7 +42,7 @@ public class AttendanceButtonsTests : TestContext
     public void ボタンをタップすると対応する出欠状態がStatusChangedで通知される(string selector, AttendanceStatus expected)
     {
         AttendanceStatus? notified = null;
-        var cut = RenderComponent<AttendanceButtons>(p => p
+        var cut = Render<AttendanceButtons>(p => p
             .Add(x => x.Status, AttendanceStatus.Undecided)
             .Add(x => x.StatusChanged, status => notified = status));
 

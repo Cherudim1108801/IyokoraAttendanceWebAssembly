@@ -7,7 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace IyokoraAttendanceWebAssembly.Tests.Pages;
 
-public class RecordingsTests : TestContext
+public class RecordingsTests : BunitContext
 {
     private FakeFirestoreClient RegisterServices()
     {
@@ -21,7 +21,7 @@ public class RecordingsTests : TestContext
     {
         RegisterServices();
 
-        var cut = RenderComponent<Recordings>();
+        var cut = Render<Recordings>();
 
         Assert.Contains("録音データはまだありません", cut.Markup);
     }
@@ -35,7 +35,7 @@ public class RecordingsTests : TestContext
             new() { PieceId = "pc1", Title = "録音無し", RecordingUrl = null, IsFeatured = false }
         ]));
 
-        var cut = RenderComponent<Recordings>();
+        var cut = Render<Recordings>();
 
         Assert.Contains("録音データはまだありません", cut.Markup);
     }
@@ -50,7 +50,7 @@ public class RecordingsTests : TestContext
             new() { PieceId = "pc2", Title = "通常曲", RecordingUrl = "https://example.com/b", IsFeatured = false }
         ]));
 
-        var cut = RenderComponent<Recordings>();
+        var cut = Render<Recordings>();
 
         var featuredSection = cut.Find("h3.section-title");
         Assert.Contains("注目の音源", featuredSection.TextContent);
@@ -73,7 +73,7 @@ public class RecordingsTests : TestContext
             new() { PieceId = "pc2", Title = "新しい曲", RecordingUrl = "https://example.com/recent", IsFeatured = false }
         ]));
 
-        var cut = RenderComponent<Recordings>();
+        var cut = Render<Recordings>();
 
         var titles = cut.FindAll("p.list-card-title").Select(e => e.TextContent).ToList();
         Assert.Equal(["新しい曲", "古い曲"], titles);

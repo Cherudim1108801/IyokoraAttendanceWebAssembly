@@ -10,7 +10,7 @@ using Moq;
 
 namespace IyokoraAttendanceWebAssembly.Tests.Pages;
 
-public class ProfileTests : TestContext
+public class ProfileTests : BunitContext
 {
     private (FakeFirestoreClient client, LocalProfileStore profile) RegisterServices(bool confirmSwitch = true)
     {
@@ -39,7 +39,7 @@ public class ProfileTests : TestContext
     {
         RegisterServices();
 
-        var cut = RenderComponent<Profile>();
+        var cut = Render<Profile>();
 
         Assert.Contains("IK1234", cut.Markup);
         Assert.Equal("現在の名前", cut.Find("input[type=text]").GetAttribute("value"));
@@ -49,7 +49,7 @@ public class ProfileTests : TestContext
     public void 名前を空にして保存するとエラーが表示され保存されない()
     {
         var (_, profile) = RegisterServices();
-        var cut = RenderComponent<Profile>();
+        var cut = Render<Profile>();
 
         cut.Find("input[type=text]").Input("   ");
         cut.Find("button.iyk-btn-primary").Click();
@@ -62,7 +62,7 @@ public class ProfileTests : TestContext
     public void 名前を変更して保存すると端末のプロフィールが更新される()
     {
         var (_, profile) = RegisterServices();
-        var cut = RenderComponent<Profile>();
+        var cut = Render<Profile>();
 
         cut.Find("input[type=text]").Input("新しい名前");
         cut.Find("button.iyk-btn-primary").Click();
@@ -84,7 +84,7 @@ public class ProfileTests : TestContext
             new() { Part = PartType.Soprano, Division = PartDivision.None }
         ]));
 
-        var cut = RenderComponent<Profile>();
+        var cut = Render<Profile>();
 
         Assert.Contains("分割曲", cut.Markup);
         Assert.DoesNotContain("分割なし曲", cut.Markup);
@@ -94,7 +94,7 @@ public class ProfileTests : TestContext
     public void 別のプロフィールを使うで確認ダイアログを承認すると端末情報がクリアされオンボーディングへ遷移する()
     {
         var (_, profile) = RegisterServices(confirmSwitch: true);
-        var cut = RenderComponent<Profile>();
+        var cut = Render<Profile>();
 
         cut.Find("button.iyk-btn-outline-danger").Click();
 
@@ -107,7 +107,7 @@ public class ProfileTests : TestContext
     public void 別のプロフィールを使うで確認ダイアログを拒否すると何も変わらない()
     {
         var (_, profile) = RegisterServices(confirmSwitch: false);
-        var cut = RenderComponent<Profile>();
+        var cut = Render<Profile>();
 
         cut.Find("button.iyk-btn-outline-danger").Click();
 
