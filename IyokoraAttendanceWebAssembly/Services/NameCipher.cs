@@ -17,7 +17,9 @@ namespace IyokoraAttendanceWebAssembly.Services;
 ///
 /// 以前は AES-CBC（改ざん検知なし）を使用していたが GCM に移行した。
 /// <see cref="DecryptOrPlainAsync"/> は旧 CBC 形式で暗号化済みの既存データも
-/// 引き続き復号できる（wwwroot/js/nameCipher.js のフォールバック参照）。
+/// 引き続き復号でき、その場合は呼び出し元が GCM への移行（再暗号化）を判断できるよう
+/// <see cref="NameDecryptResult.WasLegacyFormat"/> で通知する
+/// （wwwroot/js/nameCipher.js のフォールバック参照）。
 /// </summary>
 public class NameCipher(IJSRuntime js)
 {
@@ -33,8 +35,15 @@ public class NameCipher(IJSRuntime js)
     /// 暗号化導入前に保存された平文データが残っている場合に備え、
     /// どちらの方式でも復号できない値はそのまま平文として返す。
     /// </summary>
-    public ValueTask<string> DecryptOrPlainAsync(string value) =>
+    public ValueTask<NameDecryptResult> DecryptOrPlainAsync(string value) =>
         string.IsNullOrEmpty(value)
-            ? ValueTask.FromResult(value)
-            : js.InvokeAsync<string>("nameCipherDecryptOrPlain", KeyBase64, value);
+            ? ValueTask.FromResult(new NameDecryptResult(value, WasLegacyFormat: false))
+            : js.InvokeAsync<NameDecryptResult>("nameCipherDecryptOrPlain", KeyBase64, value);
 }
+
+/// <summary>
+/// <see cref="NameCipher.DecryptOrPlainAsync"/> の結果。
+/// <paramref name="WasLegacyFormat"/> が true の場合、旧 AES-CBC 形式から復号されたことを示す
+/// （呼び出し元は必要に応じて AES-GCM への再暗号化・保存し直しを検討する）。
+/// </summary>
+public readonly record struct NameDecryptResult(string Value, bool WasLegacyFormat);

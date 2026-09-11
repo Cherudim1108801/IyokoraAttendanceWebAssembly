@@ -1,9 +1,10 @@
 using IyokoraAttendanceWebAssembly.Models;
+using Microsoft.Extensions.Logging;
 
 namespace IyokoraAttendanceWebAssembly.Services;
 
 /// <summary>Firestore の <c>members</c> コレクションに対するメンバー情報の取得・保存を担う。</summary>
-public class MemberService(IFirestoreClient client, NameCipher nameCipher)
+public class MemberService(IFirestoreClient client, NameCipher nameCipher, ILogger<MemberService> logger)
 {
     private const string Collection = "members";
 
@@ -89,19 +90,44 @@ public class MemberService(IFirestoreClient client, NameCipher nameCipher)
             existingLoginIds.Contains);
     }
 
-    private async Task<Member> ToMemberAsync(FirestoreDocument doc) => new()
+    private async Task<Member> ToMemberAsync(FirestoreDocument doc)
     {
-        Id = doc.Id,
-        Name = await nameCipher.DecryptOrPlainAsync(doc.GetString("name")),
-        LoginId = doc.GetString("loginId"),
-        Part = Enum.TryParse<PartType>(doc.GetString("part"), out var part) ? part : PartType.Soprano,
-        Role = Enum.TryParse<Role>(doc.GetString("role"), out var role) ? role : Role.GeneralMember,
-        PieceParts = doc.GetList("pieceParts")
-            .OfType<Dictionary<string, object?>>()
-            .Select(ToPiecePart)
-            .ToList(),
-        UpdatedAt = doc.GetDateTime("updatedAt")
-    };
+        var decryptedName = await nameCipher.DecryptOrPlainAsync(doc.GetString("name"));
+        if (decryptedName.WasLegacyFormat)
+            _ = ReencryptNameInBackgroundAsync(doc.Id, decryptedName.Value);
+
+        return new()
+        {
+            Id = doc.Id,
+            Name = decryptedName.Value,
+            LoginId = doc.GetString("loginId"),
+            Part = Enum.TryParse<PartType>(doc.GetString("part"), out var part) ? part : PartType.Soprano,
+            Role = Enum.TryParse<Role>(doc.GetString("role"), out var role) ? role : Role.GeneralMember,
+            PieceParts = doc.GetList("pieceParts")
+                .OfType<Dictionary<string, object?>>()
+                .Select(ToPiecePart)
+                .ToList(),
+            UpdatedAt = doc.GetDateTime("updatedAt")
+        };
+    }
+
+    /// <summary>
+    /// 氏名が旧 AES-CBC 形式で暗号化されていた場合に、画面の表示や読み込みをブロックせず
+    /// バックグラウンドで AES-GCM に再暗号化して保存し直す。ネットワーク障害等で失敗しても
+    /// 画面表示には影響させず、次にこのメンバーの氏名が読み取られた際に再度移行を試みる。
+    /// </summary>
+    private async Task ReencryptNameInBackgroundAsync(string memberId, string plainName)
+    {
+        try
+        {
+            var reencrypted = await nameCipher.EncryptAsync(plainName);
+            await client.UpsertDocumentAsync(Collection, memberId, new Dictionary<string, object?> { ["name"] = reencrypted });
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "氏名の暗号化方式の移行(AES-CBC→AES-GCM)に失敗しました: memberId={MemberId}", memberId);
+        }
+    }
 
     private static MemberPiecePart ToPiecePart(Dictionary<string, object?> fields) => new()
     {

@@ -70,20 +70,22 @@ async function tryDecryptLegacyCbc(base64Key, buffer) {
     }
 }
 
+// 戻り値は { value, wasLegacyFormat } の形。wasLegacyFormat が true の場合、
+// 呼び出し元（NameCipher.DecryptOrPlainAsync）は旧 CBC 形式から復号されたと判断できる。
 window.nameCipherDecryptOrPlain = async function (base64Key, value) {
     let buffer;
     try {
         buffer = base64ToBytes(value);
     } catch {
-        return value;
+        return { value, wasLegacyFormat: false };
     }
 
     const gcmResult = await tryDecryptGcm(base64Key, buffer);
-    if (gcmResult !== null) return gcmResult;
+    if (gcmResult !== null) return { value: gcmResult, wasLegacyFormat: false };
 
     const cbcResult = await tryDecryptLegacyCbc(base64Key, buffer);
-    if (cbcResult !== null) return cbcResult;
+    if (cbcResult !== null) return { value: cbcResult, wasLegacyFormat: true };
 
     // 暗号化導入前に保存された平文データの可能性があるため、そのまま返す。
-    return value;
+    return { value, wasLegacyFormat: false };
 };
