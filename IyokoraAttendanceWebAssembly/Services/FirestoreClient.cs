@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Net;
 using System.Text;
 using System.Text.Json.Nodes;
+using Microsoft.Extensions.Logging;
 
 namespace IyokoraAttendanceWebAssembly.Services;
 
@@ -10,7 +11,7 @@ namespace IyokoraAttendanceWebAssembly.Services;
 /// 認証なし運用のため、Firestore 側のセキュリティルールで
 /// 未認証アクセスを許可しておく必要がある（<see cref="FirebaseOptions"/> 参照）。
 /// </summary>
-public class FirestoreClient(HttpClient http) : IFirestoreClient
+public class FirestoreClient(HttpClient http, ILogger<FirestoreClient> logger) : IFirestoreClient
 {
     /// <summary>指定コレクション内の全ドキュメントを取得する（ページングを内部で吸収）。</summary>
     /// <param name="collection">コレクション名。</param>
@@ -39,7 +40,7 @@ public class FirestoreClient(HttpClient http) : IFirestoreClient
                 foreach (var doc in docs)
                 {
                     if (doc is JsonObject docObj)
-                        results.Add(ParseDocument(docObj));
+                        results.Add(ParseDocument(docObj, collection));
                 }
             }
 
@@ -63,7 +64,7 @@ public class FirestoreClient(HttpClient http) : IFirestoreClient
         resp.EnsureSuccessStatusCode();
         var json = await resp.Content.ReadAsStringAsync(ct);
         var node = JsonNode.Parse(json)?.AsObject();
-        return node is null ? null : ParseDocument(node);
+        return node is null ? null : ParseDocument(node, collection);
     }
 
     /// <summary>指定IDのドキュメントを作成または上書き保存する（存在しなければ新規作成）。</summary>
@@ -118,7 +119,7 @@ public class FirestoreClient(HttpClient http) : IFirestoreClient
         _ => throw new NotSupportedException($"Unsupported Firestore value type: {value.GetType()}")
     };
 
-    private static FirestoreDocument ParseDocument(JsonObject doc)
+    private FirestoreDocument ParseDocument(JsonObject doc, string collection)
     {
         var name = doc["name"]?.GetValue<string>() ?? string.Empty;
         var id = name.Contains('/') ? name[(name.LastIndexOf('/') + 1)..] : name;
@@ -129,7 +130,7 @@ public class FirestoreClient(HttpClient http) : IFirestoreClient
             foreach (var (key, value) in fieldsObj)
             {
                 if (value is JsonObject valueObj)
-                    fields[key] = ParseValue(valueObj);
+                    fields[key] = ParseValue(valueObj, $"{collection}/{id}.{key}");
             }
         }
 
@@ -140,24 +141,43 @@ public class FirestoreClient(HttpClient http) : IFirestoreClient
     /// フィールド値を解析する。手動でのデータ削除・編集等により想定外の形（値が欠けている、
     /// 数値や日時として解釈できない文字列が入っている等）になっていても例外を投げず、
     /// 解析できない場合は <c>null</c> を返す（呼び出し元の <see cref="FirestoreDocument"/> の
-    /// Get* 系メソッドが持つフォールバック値に委ねる）。
+    /// Get* 系メソッドが持つフォールバック値に委ねる）。解析に失敗した場合は原因追跡のため
+    /// <paramref name="context"/>（コレクション/ドキュメントID.フィールド名）付きで警告ログを出す。
     /// </summary>
-    private static object? ParseValue(JsonObject valueObj)
+    private object? ParseValue(JsonObject valueObj, string context)
     {
         foreach (var (kind, value) in valueObj)
         {
-            return kind switch
+            switch (kind)
             {
-                "stringValue" => TryGetString(value),
-                "booleanValue" => value?.GetValue<bool>(),
-                "integerValue" => long.TryParse(TryGetString(value), NumberStyles.Integer, CultureInfo.InvariantCulture, out var l) ? l : null,
-                "doubleValue" => value?.GetValue<double>(),
-                "timestampValue" => DateTime.TryParse(TryGetString(value), CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var dt) ? dt : null,
-                "arrayValue" => ParseArray(value as JsonObject),
-                "mapValue" => ParseMap(value as JsonObject),
-                "nullValue" => null,
-                _ => null
-            };
+                case "stringValue":
+                    return TryGetString(value, context);
+                case "booleanValue":
+                    return value?.GetValue<bool>();
+                case "integerValue":
+                    var rawInt = TryGetString(value, context);
+                    if (long.TryParse(rawInt, NumberStyles.Integer, CultureInfo.InvariantCulture, out var l))
+                        return l;
+                    logger.LogWarning("Firestore integerValue の解析に失敗しました: {Context}, value={Value}", context, rawInt);
+                    return null;
+                case "doubleValue":
+                    return value?.GetValue<double>();
+                case "timestampValue":
+                    var rawTs = TryGetString(value, context);
+                    if (DateTime.TryParse(rawTs, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var dt))
+                        return dt;
+                    logger.LogWarning("Firestore timestampValue の解析に失敗しました: {Context}, value={Value}", context, rawTs);
+                    return null;
+                case "arrayValue":
+                    return ParseArray(value as JsonObject, context);
+                case "mapValue":
+                    return ParseMap(value as JsonObject, context);
+                case "nullValue":
+                    return null;
+                default:
+                    logger.LogWarning("未知のFirestoreフィールド種別です: {Context}, kind={Kind}", context, kind);
+                    return null;
+            }
         }
         return null;
     }
@@ -166,7 +186,7 @@ public class FirestoreClient(HttpClient http) : IFirestoreClient
     /// JSON ノードから文字列を取り出す。想定と異なる型（例：手動編集で数値が入っている等）で
     /// 変換に失敗しても例外を投げず <c>null</c> を返す。
     /// </summary>
-    private static string? TryGetString(JsonNode? node)
+    private string? TryGetString(JsonNode? node, string context)
     {
         try
         {
@@ -174,25 +194,26 @@ public class FirestoreClient(HttpClient http) : IFirestoreClient
         }
         catch (Exception ex) when (ex is InvalidOperationException or FormatException)
         {
+            logger.LogWarning(ex, "Firestore フィールド値を文字列として取得できませんでした: {Context}", context);
             return null;
         }
     }
 
-    private static List<object?> ParseArray(JsonObject? arrayValue)
+    private List<object?> ParseArray(JsonObject? arrayValue, string context)
     {
         var list = new List<object?>();
         if (arrayValue?["values"] is JsonArray values)
         {
-            foreach (var v in values)
+            for (var i = 0; i < values.Count; i++)
             {
-                if (v is JsonObject vo)
-                    list.Add(ParseValue(vo));
+                if (values[i] is JsonObject vo)
+                    list.Add(ParseValue(vo, $"{context}[{i}]"));
             }
         }
         return list;
     }
 
-    private static Dictionary<string, object?> ParseMap(JsonObject? mapValue)
+    private Dictionary<string, object?> ParseMap(JsonObject? mapValue, string context)
     {
         var dict = new Dictionary<string, object?>();
         if (mapValue?["fields"] is JsonObject fields)
@@ -200,7 +221,7 @@ public class FirestoreClient(HttpClient http) : IFirestoreClient
             foreach (var (key, val) in fields)
             {
                 if (val is JsonObject vo)
-                    dict[key] = ParseValue(vo);
+                    dict[key] = ParseValue(vo, $"{context}.{key}");
             }
         }
         return dict;

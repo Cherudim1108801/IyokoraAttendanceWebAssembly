@@ -1,6 +1,13 @@
-// AES-256-CBC を Web Crypto API (SubtleCrypto) 経由で行う。
+// AES-256-GCM を Web Crypto API (SubtleCrypto) 経由で行う。
 // .NET の System.Security.Cryptography.Aes は Blazor WebAssembly (browser-wasm) では
 // ネイティブ実装が存在せずサポートされないため、ブラウザ標準の SubtleCrypto を利用する。
+//
+// 以前のバージョンは AES-CBC（改ざん検知なし）を使用していたため、GCM 移行後も
+// Firestore に残っている旧形式（CBC・16byte IV）を復号できるようフォールバックを残している。
+// 新規の暗号化は常に GCM（12byte IV、認証タグ付き）で行う。
+
+const GCM_IV_LENGTH = 12;
+const CBC_IV_LENGTH = 16;
 
 function base64ToBytes(base64) {
     const binStr = atob(base64);
@@ -19,16 +26,16 @@ function bytesToBase64(bytes) {
     return btoa(binStr);
 }
 
-async function importKey(base64Key, usage) {
+async function importKey(base64Key, algorithmName, usage) {
     const keyBytes = base64ToBytes(base64Key);
-    return crypto.subtle.importKey('raw', keyBytes, 'AES-CBC', false, [usage]);
+    return crypto.subtle.importKey('raw', keyBytes, algorithmName, false, [usage]);
 }
 
 window.nameCipherEncrypt = async function (base64Key, plainText) {
-    const key = await importKey(base64Key, 'encrypt');
-    const iv = crypto.getRandomValues(new Uint8Array(16));
+    const key = await importKey(base64Key, 'AES-GCM', 'encrypt');
+    const iv = crypto.getRandomValues(new Uint8Array(GCM_IV_LENGTH));
     const plainBytes = new TextEncoder().encode(plainText);
-    const cipherBuf = await crypto.subtle.encrypt({ name: 'AES-CBC', iv }, key, plainBytes);
+    const cipherBuf = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, plainBytes);
 
     const combined = new Uint8Array(iv.length + cipherBuf.byteLength);
     combined.set(iv, 0);
@@ -36,19 +43,49 @@ window.nameCipherEncrypt = async function (base64Key, plainText) {
     return bytesToBase64(combined);
 };
 
-window.nameCipherDecryptOrPlain = async function (base64Key, value) {
+async function tryDecryptGcm(base64Key, buffer) {
+    if (buffer.length <= GCM_IV_LENGTH) return null;
     try {
-        const buffer = base64ToBytes(value);
-        if (buffer.length <= 16) {
-            return value;
-        }
+        const iv = buffer.slice(0, GCM_IV_LENGTH);
+        const cipherBytes = buffer.slice(GCM_IV_LENGTH);
+        const key = await importKey(base64Key, 'AES-GCM', 'decrypt');
+        const plainBuf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, cipherBytes);
+        return new TextDecoder().decode(plainBuf);
+    } catch {
+        return null;
+    }
+}
 
-        const iv = buffer.slice(0, 16);
-        const cipherBytes = buffer.slice(16);
-        const key = await importKey(base64Key, 'decrypt');
+// 旧バージョン（AES-CBC）で暗号化された既存データ用のフォールバック。
+async function tryDecryptLegacyCbc(base64Key, buffer) {
+    if (buffer.length <= CBC_IV_LENGTH) return null;
+    try {
+        const iv = buffer.slice(0, CBC_IV_LENGTH);
+        const cipherBytes = buffer.slice(CBC_IV_LENGTH);
+        const key = await importKey(base64Key, 'AES-CBC', 'decrypt');
         const plainBuf = await crypto.subtle.decrypt({ name: 'AES-CBC', iv }, key, cipherBytes);
         return new TextDecoder().decode(plainBuf);
     } catch {
-        return value;
+        return null;
     }
+}
+
+// 戻り値は { value, wasLegacyFormat } の形。wasLegacyFormat が true の場合、
+// 呼び出し元（NameCipher.DecryptOrPlainAsync）は旧 CBC 形式から復号されたと判断できる。
+window.nameCipherDecryptOrPlain = async function (base64Key, value) {
+    let buffer;
+    try {
+        buffer = base64ToBytes(value);
+    } catch {
+        return { value, wasLegacyFormat: false };
+    }
+
+    const gcmResult = await tryDecryptGcm(base64Key, buffer);
+    if (gcmResult !== null) return { value: gcmResult, wasLegacyFormat: false };
+
+    const cbcResult = await tryDecryptLegacyCbc(base64Key, buffer);
+    if (cbcResult !== null) return { value: cbcResult, wasLegacyFormat: true };
+
+    // 暗号化導入前に保存された平文データの可能性があるため、そのまま返す。
+    return { value, wasLegacyFormat: false };
 };

@@ -5,7 +5,7 @@ using Microsoft.JSInterop;
 namespace IyokoraAttendanceWebAssembly.Services;
 
 /// <summary>
-/// Firestore に保存するメンバー氏名を AES-256-CBC で暗号化・復号する。
+/// Firestore に保存するメンバー氏名を AES-256-GCM（認証付き暗号）で暗号化・復号する。
 /// このアプリはログイン機能を持たず全端末が同じデータへアクセスするため、
 /// 鍵は端末間で共有できるようアプリ内に固定で埋め込んでいる
 /// （Firestore コンソール等で氏名が平文表示されるのを防ぐ難読化目的であり、
@@ -14,23 +14,36 @@ namespace IyokoraAttendanceWebAssembly.Services;
 /// Blazor WebAssembly (browser-wasm) には System.Security.Cryptography.Aes の
 /// ネイティブ実装が存在しないため、実際の暗号化・復号はブラウザ標準の
 /// SubtleCrypto (wwwroot/js/nameCipher.js) 経由で行う。
+///
+/// 以前は AES-CBC（改ざん検知なし）を使用していたが GCM に移行した。
+/// <see cref="DecryptOrPlainAsync"/> は旧 CBC 形式で暗号化済みの既存データも
+/// 引き続き復号でき、その場合は呼び出し元が GCM への移行（再暗号化）を判断できるよう
+/// <see cref="NameDecryptResult.WasLegacyFormat"/> で通知する
+/// （wwwroot/js/nameCipher.js のフォールバック参照）。
 /// </summary>
 public class NameCipher(IJSRuntime js)
 {
     private static readonly string KeyBase64 =
         Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes("IyokoraAttendanceApp:Member.Name:v1")));
 
-    /// <summary>氏名を暗号化し、IV を先頭に付与した Base64 文字列を返す。</summary>
+    /// <summary>氏名を AES-256-GCM で暗号化し、IV を先頭に付与した Base64 文字列を返す。</summary>
     public ValueTask<string> EncryptAsync(string plainText) =>
         js.InvokeAsync<string>("nameCipherEncrypt", KeyBase64, plainText);
 
     /// <summary>
-    /// <see cref="EncryptAsync"/> で生成された文字列を復号する。
+    /// <see cref="EncryptAsync"/> で生成された文字列、または旧 AES-CBC 形式の文字列を復号する。
     /// 暗号化導入前に保存された平文データが残っている場合に備え、
-    /// 復号できない値はそのまま平文として返す。
+    /// どちらの方式でも復号できない値はそのまま平文として返す。
     /// </summary>
-    public ValueTask<string> DecryptOrPlainAsync(string value) =>
+    public ValueTask<NameDecryptResult> DecryptOrPlainAsync(string value) =>
         string.IsNullOrEmpty(value)
-            ? ValueTask.FromResult(value)
-            : js.InvokeAsync<string>("nameCipherDecryptOrPlain", KeyBase64, value);
+            ? ValueTask.FromResult(new NameDecryptResult(value, WasLegacyFormat: false))
+            : js.InvokeAsync<NameDecryptResult>("nameCipherDecryptOrPlain", KeyBase64, value);
 }
+
+/// <summary>
+/// <see cref="NameCipher.DecryptOrPlainAsync"/> の結果。
+/// <paramref name="WasLegacyFormat"/> が true の場合、旧 AES-CBC 形式から復号されたことを示す
+/// （呼び出し元は必要に応じて AES-GCM への再暗号化・保存し直しを検討する）。
+/// </summary>
+public readonly record struct NameDecryptResult(string Value, bool WasLegacyFormat);

@@ -2,6 +2,7 @@ using System.Net;
 using System.Text;
 using System.Text.Json.Nodes;
 using IyokoraAttendanceWebAssembly.Services;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Moq.Protected;
 
@@ -13,7 +14,7 @@ public class FirestoreClientTests
     {
         var handlerMock = new Mock<HttpMessageHandler>();
         var httpClient = new HttpClient(handlerMock.Object) { BaseAddress = new Uri("https://firestore.googleapis.com/") };
-        return (new FirestoreClient(httpClient), handlerMock);
+        return (new FirestoreClient(httpClient, NullLogger<FirestoreClient>.Instance), handlerMock);
     }
 
     private static void SetupResponse(Mock<HttpMessageHandler> handler, HttpMethod method, string urlContains, HttpStatusCode statusCode, string? jsonBody = null)

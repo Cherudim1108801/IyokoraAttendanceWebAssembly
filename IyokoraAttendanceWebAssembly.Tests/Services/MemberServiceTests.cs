@@ -1,5 +1,6 @@
 using IyokoraAttendanceWebAssembly.Models;
 using IyokoraAttendanceWebAssembly.Services;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.JSInterop;
 using Moq;
 
@@ -34,13 +35,17 @@ public class MemberServiceTests
 
         // NameCipher は JS Interop (SubtleCrypto) 経由で暗号化・復号するため、
         // IJSRuntime をモックしてそのまま値を通す（暗号化・復号のロジック自体は wwwroot/js のJS実装側にあり対象外）。
+        // 復号は常に「旧形式ではない（WasLegacyFormat=false）」を返し、自動再暗号化は発生させない。
         var jsRuntimeMock = new Mock<IJSRuntime>();
         jsRuntimeMock
             .Setup(js => js.InvokeAsync<string>(It.IsAny<string>(), It.IsAny<object?[]>()))
             .Returns((string _, object?[] args) => ValueTask.FromResult((string)args[1]!));
+        jsRuntimeMock
+            .Setup(js => js.InvokeAsync<NameDecryptResult>(It.IsAny<string>(), It.IsAny<object?[]>()))
+            .Returns((string _, object?[] args) => ValueTask.FromResult(new NameDecryptResult((string)args[1]!, WasLegacyFormat: false)));
 
         var nameCipher = new NameCipher(jsRuntimeMock.Object);
-        return (new MemberService(clientMock.Object, nameCipher), clientMock);
+        return (new MemberService(clientMock.Object, nameCipher, NullLogger<MemberService>.Instance), clientMock);
     }
 
     [Fact]
@@ -132,5 +137,47 @@ public class MemberServiceTests
         var found = await service.FindByLoginIdAsync("IK9999");
 
         Assert.Null(found);
+    }
+
+    [Fact]
+    public async Task 旧CBC形式で復号された氏名は画面表示をブロックせずAES_GCM形式へ自動的に再暗号化される()
+    {
+        var docs = new[] { CreateMemberDoc("m1", "レガシー太郎", PartType.Soprano, Role.GeneralMember, "IK0001") };
+
+        var clientMock = new Mock<IFirestoreClient>();
+        clientMock
+            .Setup(c => c.ListDocumentsAsync("members", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(docs.ToList());
+
+        var upserted = new TaskCompletionSource<Dictionary<string, object?>>();
+        clientMock
+            .Setup(c => c.UpsertDocumentAsync("members", "m1", It.IsAny<Dictionary<string, object?>>(), It.IsAny<CancellationToken>()))
+            .Returns((string _, string _, Dictionary<string, object?> fields, CancellationToken _) =>
+            {
+                upserted.TrySetResult(fields);
+                return Task.CompletedTask;
+            });
+
+        // 復号時に WasLegacyFormat=true を返し、旧CBC形式からの復号を再現する。
+        var jsRuntimeMock = new Mock<IJSRuntime>();
+        jsRuntimeMock
+            .Setup(js => js.InvokeAsync<string>(It.IsAny<string>(), It.IsAny<object?[]>()))
+            .Returns((string _, object?[] args) => ValueTask.FromResult("GCM再暗号化:" + (string)args[1]!));
+        jsRuntimeMock
+            .Setup(js => js.InvokeAsync<NameDecryptResult>(It.IsAny<string>(), It.IsAny<object?[]>()))
+            .Returns((string _, object?[] args) => ValueTask.FromResult(new NameDecryptResult((string)args[1]!, WasLegacyFormat: true)));
+
+        var service = new MemberService(clientMock.Object, new NameCipher(jsRuntimeMock.Object), NullLogger<MemberService>.Instance);
+
+        var members = await service.GetAllAsync();
+
+        // 画面表示（復号結果）はバックグラウンド処理の完了を待たずに得られる。
+        Assert.Equal("レガシー太郎", members[0].Name);
+
+        var completed = await Task.WhenAny(upserted.Task, Task.Delay(TimeSpan.FromSeconds(2)));
+        Assert.Same(upserted.Task, completed);
+
+        var savedFields = await upserted.Task;
+        Assert.Equal("GCM再暗号化:レガシー太郎", savedFields["name"]);
     }
 }
