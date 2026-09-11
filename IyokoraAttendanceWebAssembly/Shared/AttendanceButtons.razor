@@ -5,8 +5,11 @@
             disabled="@Disabled" @onclick="() => Choose(AttendanceStatus.Attending)">参加</button>
     <button class="attend-btn attend-no @(Status == AttendanceStatus.NotAttending ? "selected" : "")"
             disabled="@Disabled" @onclick="() => Choose(AttendanceStatus.NotAttending)">不参加</button>
-    <button class="attend-btn attend-undecided @(Status == AttendanceStatus.Undecided ? "selected" : "")"
-            disabled="@Disabled" @onclick="() => Choose(AttendanceStatus.Undecided)">未定</button>
+    @if (!HideUndecided)
+    {
+        <button class="attend-btn attend-undecided @(Status == AttendanceStatus.Undecided ? "selected" : "")"
+                disabled="@Disabled" @onclick="() => Choose(AttendanceStatus.Undecided)">未定</button>
+    }
 </div>
 
 @code {
@@ -15,6 +18,10 @@
 
     [Parameter]
     public bool Disabled { get; set; }
+
+    /// <summary>「未定」ボタンを非表示にするかどうか。参加／不参加の二択のみで使う画面向け。</summary>
+    [Parameter]
+    public bool HideUndecided { get; set; }
 
     [Parameter]
     public EventCallback<AttendanceStatus> StatusChanged { get; set; }

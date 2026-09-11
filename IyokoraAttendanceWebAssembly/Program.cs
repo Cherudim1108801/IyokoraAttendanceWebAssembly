@@ -19,5 +19,7 @@ builder.Services.AddScoped<MemberService>();
 builder.Services.AddScoped<PracticeService>();
 builder.Services.AddScoped<AttendanceService>();
 builder.Services.AddScoped<PieceService>();
+builder.Services.AddScoped<ScheduleCandidateService>();
+builder.Services.AddScoped<ScheduleVoteService>();
 
 await builder.Build().RunAsync();

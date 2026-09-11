@@ -1,0 +1,176 @@
+@page "/schedule-poll"
+@inject ScheduleCandidateService ScheduleCandidateService
+@inject ScheduleVoteService ScheduleVoteService
+@inject LocalProfileStore Profile
+
+<div class="page-pad">
+
+    @if (Profile.Role == Role.Admin)
+    {
+        <button class="iyk-btn iyk-btn-primary iyk-btn-block" @onclick="ToggleAddPanel">＋ 候補日を追加</button>
+    }
+
+    @if (_isAddPanelVisible)
+    {
+        <div class="highlight-card" style="margin-top:10px;">
+            <div class="field">
+                <label>日付</label>
+                <input type="date" @bind="_newDate" @bind:format="yyyy-MM-dd" />
+            </div>
+            <div class="field">
+                <label>時間帯</label>
+                <div style="display:flex;gap:16px;">
+                    @foreach (var timeOfDay in TimeOfDayExtensions.All)
+                    {
+                        <label style="display:flex;align-items:center;gap:4px;font-weight:normal;">
+                            <input type="radio" name="newTimeOfDay" checked="@(_newTimeOfDay == timeOfDay)" @onchange="() => _newTimeOfDay = timeOfDay" />
+                            @timeOfDay.ToDisplayName()
+                        </label>
+                    }
+                </div>
+            </div>
+            <button class="iyk-btn iyk-btn-primary iyk-btn-block" style="margin-top:8px;" @onclick="AddCandidateAsync">この内容で登録</button>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(_errorMessage))
+    {
+        <p class="error-text">@_errorMessage</p>
+    }
+
+    @if (_isBusy)
+    {
+        <p class="hint-text">読み込み中...</p>
+    }
+    else if (_candidates.Count == 0)
+    {
+        <p class="empty-text">登録されている日程候補はありません。</p>
+    }
+    else
+    {
+        @foreach (var candidate in _candidates)
+        {
+            <div class="list-card">
+                <div>
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                        <p class="list-card-title" style="margin:0;">@candidate.Date.ToString("yyyy年M月d日(ddd)")</p>
+                        <span style="background:#512BD4;color:#fff;font-weight:bold;font-size:13px;padding:3px 10px;border-radius:12px;">@candidate.TimeOfDay.ToDisplayName()</span>
+                    </div>
+                    <AttendanceButtons Status="GetMyStatus(candidate.Id)" HideUndecided="true"
+                                       StatusChanged="status => SetMyVoteAsync(candidate, status)" />
+                </div>
+                <div style="text-align:right;">
+                    <p style="font-size:28px;font-weight:bold;margin:0;line-height:1;">@GetAttendingCount(candidate.Id)<span style="font-size:14px;font-weight:normal;">人</span></p>
+                    <p class="list-card-sub" style="margin:4px 0 0;">@GetAttendingCount(candidate.Id) / @GetNotAttendingCount(candidate.Id)</p>
+                    @if (Profile.Role == Role.Admin)
+                    {
+                        <button class="iyk-btn-text-danger" @onclick="() => DeleteCandidateAsync(candidate)">削除</button>
+                    }
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private List<ScheduleCandidate> _candidates = [];
+    private Dictionary<string, AttendanceStatus> _myStatusByCandidateId = [];
+    private Dictionary<string, int> _attendingCountByCandidateId = [];
+    private Dictionary<string, int> _notAttendingCountByCandidateId = [];
+    private bool _isAddPanelVisible;
+    private DateTime _newDate = DateTime.Today.AddDays(7);
+    private TimeOfDay _newTimeOfDay = TimeOfDay.Morning;
+    private bool _isBusy;
+    private string? _errorMessage;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _isBusy = true;
+        _errorMessage = null;
+        try
+        {
+            _candidates = await ScheduleCandidateService.GetUpcomingAsync();
+            var votes = await ScheduleVoteService.GetAllAsync();
+
+            _attendingCountByCandidateId = votes
+                .Where(v => v.Status == AttendanceStatus.Attending)
+                .GroupBy(v => v.CandidateId)
+                .ToDictionary(g => g.Key, g => g.Count());
+
+            _notAttendingCountByCandidateId = votes
+                .Where(v => v.Status == AttendanceStatus.NotAttending)
+                .GroupBy(v => v.CandidateId)
+                .ToDictionary(g => g.Key, g => g.Count());
+
+            _myStatusByCandidateId = votes
+                .Where(v => v.MemberId == Profile.MemberId)
+                .ToDictionary(v => v.CandidateId, v => v.Status);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"読み込みに失敗しました。({ex.Message})";
+        }
+        finally
+        {
+            _isBusy = false;
+        }
+    }
+
+    private int GetAttendingCount(string candidateId) => _attendingCountByCandidateId.GetValueOrDefault(candidateId);
+
+    private int GetNotAttendingCount(string candidateId) => _notAttendingCountByCandidateId.GetValueOrDefault(candidateId);
+
+    private AttendanceStatus GetMyStatus(string candidateId) => _myStatusByCandidateId.GetValueOrDefault(candidateId, AttendanceStatus.Undecided);
+
+    private void ToggleAddPanel() => _isAddPanelVisible = !_isAddPanelVisible;
+
+    private async Task AddCandidateAsync()
+    {
+        if (Profile.Role != Role.Admin)
+            return;
+
+        try
+        {
+            await ScheduleCandidateService.CreateAsync(_newDate, _newTimeOfDay);
+            _newDate = DateTime.Today.AddDays(7);
+            _newTimeOfDay = TimeOfDay.Morning;
+            _isAddPanelVisible = false;
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"候補日の追加に失敗しました。({ex.Message})";
+        }
+    }
+
+    private async Task DeleteCandidateAsync(ScheduleCandidate candidate)
+    {
+        if (Profile.Role != Role.Admin)
+            return;
+
+        try
+        {
+            await ScheduleCandidateService.DeleteAsync(candidate.Id);
+            _candidates.Remove(candidate);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"削除に失敗しました。({ex.Message})";
+        }
+    }
+
+    private async Task SetMyVoteAsync(ScheduleCandidate candidate, AttendanceStatus status)
+    {
+        try
+        {
+            await ScheduleVoteService.SetStatusAsync(candidate.Id, Profile.MemberId, Profile.Name, status);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"投票の更新に失敗しました。({ex.Message})";
+        }
+    }
+}
