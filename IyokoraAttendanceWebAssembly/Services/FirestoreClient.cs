@@ -11,7 +11,7 @@ namespace IyokoraAttendanceWebAssembly.Services;
 /// 認証なし運用のため、Firestore 側のセキュリティルールで
 /// 未認証アクセスを許可しておく必要がある（<see cref="FirebaseOptions"/> 参照）。
 /// </summary>
-public class FirestoreClient(HttpClient http, ILogger<FirestoreClient> logger) : IFirestoreClient
+public class FirestoreClient(HttpClient http, ILogger<FirestoreClient> logger, IAppCheckTokenProvider appCheck) : IFirestoreClient
 {
     /// <summary>指定コレクション内の全ドキュメントを取得する（ページングを内部で吸収）。</summary>
     /// <param name="collection">コレクション名。</param>
@@ -27,7 +27,9 @@ public class FirestoreClient(HttpClient http, ILogger<FirestoreClient> logger) :
             if (!string.IsNullOrEmpty(pageToken))
                 url += $"&pageToken={Uri.EscapeDataString(pageToken)}";
 
-            using var resp = await http.GetAsync(url, ct);
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            await AttachAppCheckHeaderAsync(request);
+            using var resp = await http.SendAsync(request, ct);
             if (resp.StatusCode == HttpStatusCode.NotFound)
                 break; // コレクション未作成 = データなし
 
@@ -57,7 +59,9 @@ public class FirestoreClient(HttpClient http, ILogger<FirestoreClient> logger) :
     public async Task<FirestoreDocument?> GetDocumentAsync(string collection, string documentId, CancellationToken ct = default)
     {
         var url = $"{FirebaseOptions.FirestoreBaseUrl}/{collection}/{Uri.EscapeDataString(documentId)}";
-        using var resp = await http.GetAsync(url, ct);
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        await AttachAppCheckHeaderAsync(request);
+        using var resp = await http.SendAsync(request, ct);
         if (resp.StatusCode == HttpStatusCode.NotFound)
             return null;
 
@@ -80,6 +84,7 @@ public class FirestoreClient(HttpClient http, ILogger<FirestoreClient> logger) :
 
         using var content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json");
         using var request = new HttpRequestMessage(HttpMethod.Patch, url) { Content = content };
+        await AttachAppCheckHeaderAsync(request);
         using var resp = await http.SendAsync(request, ct);
         resp.EnsureSuccessStatusCode();
     }
@@ -91,9 +96,23 @@ public class FirestoreClient(HttpClient http, ILogger<FirestoreClient> logger) :
     public async Task DeleteDocumentAsync(string collection, string documentId, CancellationToken ct = default)
     {
         var url = $"{FirebaseOptions.FirestoreBaseUrl}/{collection}/{Uri.EscapeDataString(documentId)}";
-        using var resp = await http.DeleteAsync(url, ct);
+        using var request = new HttpRequestMessage(HttpMethod.Delete, url);
+        await AttachAppCheckHeaderAsync(request);
+        using var resp = await http.SendAsync(request, ct);
         if (resp.StatusCode != HttpStatusCode.NotFound)
             resp.EnsureSuccessStatusCode();
+    }
+
+    /// <summary>
+    /// リクエストに Firebase App Check トークンを付与する。App Check が未設定（<see cref="FirebaseOptions.RecaptchaSiteKey"/>
+    /// が空）の場合やトークン取得に失敗した場合はヘッダーを付けずに送信する
+    /// （Firestore の App Check 適用(Enforce)を有効にするまでは、ヘッダーなしのリクエストも従来どおり許可される）。
+    /// </summary>
+    private async Task AttachAppCheckHeaderAsync(HttpRequestMessage request)
+    {
+        var token = await appCheck.GetTokenAsync();
+        if (!string.IsNullOrEmpty(token))
+            request.Headers.Add("X-Firebase-AppCheck", token);
     }
 
     private static JsonObject ToFirestoreFields(Dictionary<string, object?> fields)
