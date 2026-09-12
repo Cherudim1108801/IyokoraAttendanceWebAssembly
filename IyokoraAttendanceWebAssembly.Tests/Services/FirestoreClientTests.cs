@@ -10,11 +10,15 @@ namespace IyokoraAttendanceWebAssembly.Tests.Services;
 
 public class FirestoreClientTests
 {
-    private static (FirestoreClient client, Mock<HttpMessageHandler> handler) CreateClient()
+    private static (FirestoreClient client, Mock<HttpMessageHandler> handler) CreateClient(string? appCheckToken = null)
     {
         var handlerMock = new Mock<HttpMessageHandler>();
         var httpClient = new HttpClient(handlerMock.Object) { BaseAddress = new Uri("https://firestore.googleapis.com/") };
-        return (new FirestoreClient(httpClient, NullLogger<FirestoreClient>.Instance), handlerMock);
+
+        var appCheckMock = new Mock<IAppCheckTokenProvider>();
+        appCheckMock.Setup(a => a.GetTokenAsync()).ReturnsAsync(appCheckToken);
+
+        return (new FirestoreClient(httpClient, NullLogger<FirestoreClient>.Instance, appCheckMock.Object), handlerMock);
     }
 
     private static void SetupResponse(Mock<HttpMessageHandler> handler, HttpMethod method, string urlContains, HttpStatusCode statusCode, string? jsonBody = null)
@@ -223,5 +227,39 @@ public class FirestoreClientTests
         SetupResponse(handler, HttpMethod.Delete, "pieces/piece1", HttpStatusCode.OK);
 
         await client.DeleteDocumentAsync("pieces", "piece1");
+    }
+
+    [Fact]
+    public async Task AppCheckトークンが取得できる場合はリクエストヘッダーに付与される()
+    {
+        var (client, handler) = CreateClient(appCheckToken: "dummy-token");
+        HttpRequestMessage? capturedRequest = null;
+
+        handler
+            .Protected()
+            .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
+            .Callback<HttpRequestMessage, CancellationToken>((req, _) => capturedRequest = req)
+            .ReturnsAsync(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{}", Encoding.UTF8, "application/json") });
+
+        await client.GetDocumentAsync("pieces", "piece1");
+
+        Assert.Equal("dummy-token", capturedRequest!.Headers.GetValues("X-Firebase-AppCheck").Single());
+    }
+
+    [Fact]
+    public async Task AppCheckトークンが取得できない場合はヘッダーを付与せずに送信される()
+    {
+        var (client, handler) = CreateClient(appCheckToken: null);
+        HttpRequestMessage? capturedRequest = null;
+
+        handler
+            .Protected()
+            .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
+            .Callback<HttpRequestMessage, CancellationToken>((req, _) => capturedRequest = req)
+            .ReturnsAsync(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{}", Encoding.UTF8, "application/json") });
+
+        await client.GetDocumentAsync("pieces", "piece1");
+
+        Assert.False(capturedRequest!.Headers.Contains("X-Firebase-AppCheck"));
     }
 }

@@ -35,6 +35,30 @@ public static class FirebaseOptions
     /// </summary>
     public const string LoginIdPrefix = "IK";
 
+    /// <summary>
+    /// Firebase Web アプリの apiKey。Firebase コンソール「プロジェクトの設定 &gt; 全般 &gt; マイアプリ」の
+    /// SDK構成スニペットに表示される値（未登録の場合はまず Web アプリを追加すること）。
+    /// この値自体は公開情報（クライアントに埋め込まれる想定のキー）であり、Firestore 側のアクセス制御は
+    /// 引き続きセキュリティルール（および <see cref="RecaptchaSiteKey"/> による App Check）が担う。
+    /// App Check の初期化にのみ使用する。
+    /// </summary>
+    public const string ApiKey = "AIzaSyBAh2Oqqe5IBz7qz4Aznnpmf2m41hOJ4Oc";
+
+    /// <summary>SDK構成スニペットに表示される appId。<see cref="ApiKey"/> と同様に App Check の初期化にのみ使用する。</summary>
+    public const string AppId = "1:646849019045:web:d735d9c583a66ad18ee14c";
+
+    /// <summary>
+    /// Firebase App Check（reCAPTCHA Enterprise プロバイダ）のサイトキー。
+    /// classic の reCAPTCHA（v3）は Firebase コンソールでの新規登録が廃止されているため、
+    /// このプロジェクトでは reCAPTCHA Enterprise を使用している（<c>wwwroot/js/appCheck.js</c> の
+    /// <c>ReCaptchaEnterpriseProvider</c> 参照）。Google Cloud Console の reCAPTCHA セクションで
+    /// 「Website」タイプのキーを作成し、Firebase コンソール「Build &gt; App Check」でアプリに登録して発行される。
+    /// 空文字のままの場合、<c>wwwroot/js/appCheck.js</c> は初期化をスキップし、
+    /// 従来どおり App Check トークンなしで Firestore にアクセスする（挙動に影響しない）。
+    /// 値を設定したうえで、Firestore の App Check 適用（Enforce）を有効化して初めて防御として機能する。
+    /// </summary>
+    public const string RecaptchaSiteKey = "6Ldf37ctAAAAAJ1UpHZ6HDWePIbOMhPK3rcvc2PO";
+
     public static string FirestoreBaseUrl =>
         $"https://firestore.googleapis.com/v1/projects/{ProjectId}/databases/(default)/documents";
 }

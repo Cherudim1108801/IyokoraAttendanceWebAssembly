@@ -19,6 +19,7 @@ public static class ServiceCollectionExtensions
         // 移植する場合はこのキャストが失敗するため、LocalProfileStore の同期 JS 呼び出しを見直すこと。
         services.AddScoped(sp => (IJSInProcessRuntime)sp.GetRequiredService<IJSRuntime>());
         services.AddScoped<IFirestoreClient, FirestoreClient>();
+        services.AddScoped<IAppCheckTokenProvider, AppCheckTokenProvider>();
         services.AddScoped<NameCipher>();
         services.AddScoped<LocalProfileStore>();
         services.AddScoped<MemberService>();
