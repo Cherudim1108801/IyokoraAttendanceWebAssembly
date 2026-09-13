@@ -33,7 +33,7 @@ public static class FirebaseOptions
     /// ログインID（<see cref="LoginIdGenerator"/> 参照）の先頭に付与する、団体ごとのアルファベット文字列。
     /// <see cref="GroupId"/> と同様、団体ごとに異なる値をビルド時に設定することを想定している。
     /// </summary>
-    public const string LoginIdPrefix = "IK";
+    public const string LoginIdPrefix = "IC";
 
     /// <summary>
     /// Firebase Web アプリの apiKey。Firebase コンソール「プロジェクトの設定 &gt; 全般 &gt; マイアプリ」の

@@ -160,6 +160,38 @@ public class MemberServiceTests
     }
 
     [Fact]
+    public async Task ログインIDを再発行すると現在のプレフィックスの新しいIDが払い出され保存される()
+    {
+        var docs = new[] { CreateMemberDoc("m1", "対象", PartType.Soprano, Role.GeneralMember, "IK1234") };
+        var (service, client) = CreateService(docs);
+
+        var newLoginId = await service.ReissueLoginIdAsync("m1");
+
+        Assert.True(LoginIdGenerator.IsValidFormat(newLoginId));
+        Assert.StartsWith(FirebaseOptions.LoginIdPrefix, newLoginId, StringComparison.Ordinal);
+        client.Verify(c => c.UpsertDocumentAsync(
+            "members",
+            "m1",
+            It.Is<Dictionary<string, object?>>(f => (string)f["loginId"]! == newLoginId),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ログインIDの再発行は既存メンバーのIDと重複しない()
+    {
+        var docs = new[]
+        {
+            CreateMemberDoc("m1", "対象", PartType.Soprano, Role.GeneralMember, "IK1234"),
+            CreateMemberDoc("m2", "既存", PartType.Soprano, Role.GeneralMember, FirebaseOptions.LoginIdPrefix + "0001")
+        };
+        var (service, _) = CreateService(docs);
+
+        var newLoginId = await service.ReissueLoginIdAsync("m1");
+
+        Assert.NotEqual(FirebaseOptions.LoginIdPrefix + "0001", newLoginId);
+    }
+
+    [Fact]
     public async Task 旧CBC形式で復号された氏名は画面表示をブロックせずAES_GCM形式へ自動的に再暗号化される()
     {
         var docs = new[] { CreateMemberDoc("m1", "レガシー太郎", PartType.Soprano, Role.GeneralMember, "IK0001") };
