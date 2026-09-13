@@ -7,26 +7,32 @@ public class AttendanceService(IFirestoreClient client)
 {
     private const string Collection = "attendances";
 
-    /// <summary>指定練習に対する全メンバーの出欠を取得する。</summary>
+    /// <summary>指定練習に対する全メンバーの出欠を取得する。コレクション全体ではなく、サーバー側で絞り込んだ結果のみを取得する。</summary>
     /// <param name="practiceId">練習予定ID。</param>
     /// <param name="ct">キャンセルトークン。</param>
     public async Task<List<Attendance>> GetForPracticeAsync(string practiceId, CancellationToken ct = default)
     {
-        var docs = await client.ListDocumentsAsync(Collection, ct);
-        return docs
-            .Where(d => d.GetString("groupId") == FirebaseOptions.GroupId && d.GetString("practiceId") == practiceId)
-            .Select(ToAttendance)
-            .ToList();
+        var filters = new Dictionary<string, object?>
+        {
+            ["groupId"] = FirebaseOptions.GroupId,
+            ["practiceId"] = practiceId
+        };
+        var docs = await client.QueryDocumentsAsync(Collection, filters, ct);
+        return docs.Select(ToAttendance).ToList();
     }
 
-    /// <summary>指定練習における、指定メンバー1人分の出欠を取得する。未回答の場合は null。</summary>
+    /// <summary>
+    /// 指定練習における、指定メンバー1人分の出欠を取得する。未回答の場合は null。
+    /// ドキュメントIDが <see cref="Attendance.BuildId"/> の複合キー規則で発行されていることを利用し、
+    /// 練習全体を取得・絞り込みせず該当ドキュメントを直接1件取得する。
+    /// </summary>
     /// <param name="practiceId">練習予定ID。</param>
     /// <param name="memberId">メンバーID。</param>
     /// <param name="ct">キャンセルトークン。</param>
     public async Task<Attendance?> GetForMemberAsync(string practiceId, string memberId, CancellationToken ct = default)
     {
-        var all = await GetForPracticeAsync(practiceId, ct);
-        return all.FirstOrDefault(a => a.MemberId == memberId);
+        var doc = await client.GetDocumentAsync(Collection, Attendance.BuildId(practiceId, memberId), ct);
+        return doc is null ? null : ToAttendance(doc);
     }
 
     /// <summary>指定練習・指定メンバーの出欠状態を登録または更新する。</summary>

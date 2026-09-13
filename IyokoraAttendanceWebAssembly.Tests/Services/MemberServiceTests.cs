@@ -25,10 +25,15 @@ public class MemberServiceTests
 
     private static (MemberService service, Mock<IFirestoreClient> client) CreateService(IEnumerable<FirestoreDocument>? docs = null)
     {
+        var list = (docs ?? []).ToList();
         var clientMock = new Mock<IFirestoreClient>();
         clientMock
             .Setup(c => c.ListDocumentsAsync("members", It.IsAny<CancellationToken>()))
-            .ReturnsAsync((docs ?? []).ToList());
+            .ReturnsAsync(list);
+        clientMock
+            .Setup(c => c.QueryDocumentsAsync("members", It.IsAny<IReadOnlyDictionary<string, object?>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string _, IReadOnlyDictionary<string, object?> filters, CancellationToken _) =>
+                list.Where(d => filters.All(f => d.Fields.TryGetValue(f.Key, out var v) && Equals(v, f.Value))).ToList());
         clientMock
             .Setup(c => c.UpsertDocumentAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Dictionary<string, object?>>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
@@ -137,6 +142,21 @@ public class MemberServiceTests
         var found = await service.FindByLoginIdAsync("IK9999");
 
         Assert.Null(found);
+    }
+
+    [Fact]
+    public async Task ログインID検索はメンバー全件を取得せずgroupIdとログインIDで絞り込む()
+    {
+        var docs = new[] { CreateMemberDoc("m1", "対象", PartType.Soprano, Role.GeneralMember, "IK1234") };
+        var (service, client) = CreateService(docs);
+
+        await service.FindByLoginIdAsync("ik1234");
+
+        client.Verify(c => c.QueryDocumentsAsync(
+            "members",
+            It.Is<IReadOnlyDictionary<string, object?>>(f => (string)f["groupId"]! == FirebaseOptions.GroupId && (string)f["loginId"]! == "IK1234"),
+            It.IsAny<CancellationToken>()), Times.Once);
+        client.Verify(c => c.ListDocumentsAsync("members", It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]

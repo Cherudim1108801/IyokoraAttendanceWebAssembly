@@ -77,6 +77,21 @@ public class PracticeDetailTests : BunitContext
     }
 
     [Fact]
+    public void 出欠ボタンをタップしても各コレクションの再取得は発生しない()
+    {
+        var (client, profile, _) = RegisterServices();
+        client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3)));
+        client.Seed("members", "me", Seed.Member("自分"));
+
+        var cut = Render();
+        var callsAfterLoad = client.Calls.Count;
+
+        cut.Find("button.attend-yes").Click();
+
+        Assert.Equal(callsAfterLoad, client.Calls.Count);
+    }
+
+    [Fact]
     public void 過去の練習では出欠ボタンが無効化され案内が表示される()
     {
         var (client, _, _) = RegisterServices();
@@ -116,6 +131,22 @@ public class PracticeDetailTests : BunitContext
     }
 
     [Fact]
+    public void タイムスケジュールを保存しても各コレクションの再取得は発生しない()
+    {
+        var (client, _, _) = RegisterServices(Role.Admin);
+        client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3)));
+
+        var cut = Render();
+        cut.Find("button.iyk-btn-text").Click();
+        cut.FindAll("input[type=time]")[0].Input("10:00:00");
+        cut.FindAll("input[type=time]")[1].Input("12:00:00");
+        var callsAfterLoad = client.Calls.Count;
+        cut.Find("button.iyk-btn-primary").Click();
+
+        Assert.Equal(callsAfterLoad, client.Calls.Count);
+    }
+
+    [Fact]
     public void 開始時刻のみ入力すると検証エラーが表示され保存されない()
     {
         var (client, _, _) = RegisterServices(Role.Admin);
@@ -146,6 +177,23 @@ public class PracticeDetailTests : BunitContext
     }
 
     [Fact]
+    public void 演奏予定曲を保存しても各コレクションの再取得は発生しない()
+    {
+        var (client, _, _) = RegisterServices(Role.Admin);
+        client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3)));
+        client.Seed("pieces", "pc1", Seed.Piece("編集後の曲"));
+
+        var cut = Render();
+        var editButtons = cut.FindAll("button.iyk-btn-text");
+        editButtons[1].Click();
+        cut.Find("input[type=checkbox]").Change(true);
+        var callsAfterLoad = client.Calls.Count;
+        cut.Find("button.iyk-btn-primary").Click();
+
+        Assert.Equal(callsAfterLoad, client.Calls.Count);
+    }
+
+    [Fact]
     public void 管理者が録音リンクを登録すると音源リンクが表示される()
     {
         var (client, _, js) = RegisterServices(Role.Admin);
@@ -161,6 +209,23 @@ public class PracticeDetailTests : BunitContext
 
         Assert.Contains("録音を聴く", cut.Markup);
         Assert.Contains("★ 注目に設定", cut.Markup);
+    }
+
+    [Fact]
+    public void 録音リンクを登録しても各コレクションの再取得は発生しない()
+    {
+        var (client, _, js) = RegisterServices(Role.Admin);
+        client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3), pieces:
+        [
+            new() { PieceId = "pc1", Title = "曲A" }
+        ]));
+        js.Setup(j => j.InvokeAsync<string?>("prompt", It.IsAny<object?[]>())).ReturnsAsync("https://example.com/rec");
+
+        var cut = Render();
+        var callsAfterLoad = client.Calls.Count;
+        cut.FindAll("button.iyk-btn-text")[2].Click();
+
+        Assert.Equal(callsAfterLoad, client.Calls.Count);
     }
 
     [Fact]
@@ -199,6 +264,22 @@ public class PracticeDetailTests : BunitContext
     }
 
     [Fact]
+    public void 注目設定を切り替えても各コレクションの再取得は発生しない()
+    {
+        var (client, _, _) = RegisterServices(Role.Admin);
+        client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3), pieces:
+        [
+            new() { PieceId = "pc1", Title = "曲A", RecordingUrl = "https://example.com/rec", IsFeatured = false }
+        ]));
+
+        var cut = Render();
+        var callsAfterLoad = client.Calls.Count;
+        cut.FindAll("button.iyk-btn-text")[2].Click();
+
+        Assert.Equal(callsAfterLoad, client.Calls.Count);
+    }
+
+    [Fact]
     public void 管理者が鍵の受け取り状況を切り替えられる()
     {
         var (client, profile, _) = RegisterServices(Role.Admin);
@@ -211,6 +292,19 @@ public class PracticeDetailTests : BunitContext
 
         Assert.Contains("受け取り済み", cut.Markup);
         Assert.Contains(profile.Name, cut.Markup);
+    }
+
+    [Fact]
+    public void 鍵の受け取り状況を切り替えても各コレクションの再取得は発生しない()
+    {
+        var (client, _, _) = RegisterServices(Role.Admin);
+        client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3), requiresKeyPickup: true));
+
+        var cut = Render();
+        var callsAfterLoad = client.Calls.Count;
+        cut.Find("button.iyk-btn-text-primary").Click();
+
+        Assert.Equal(callsAfterLoad, client.Calls.Count);
     }
 
     [Fact]

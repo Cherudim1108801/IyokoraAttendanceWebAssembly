@@ -11,17 +11,34 @@ internal class FakeFirestoreClient : IFirestoreClient
 {
     private readonly Dictionary<string, Dictionary<string, Dictionary<string, object?>>> _collections = [];
 
-    public Task<List<FirestoreDocument>> ListDocumentsAsync(string collection, CancellationToken ct = default) =>
-        Task.FromResult(GetCollection(collection)
+    /// <summary>各メソッドの呼び出し履歴（メソッド種別, コレクション名）。テストで通信回数(全件取得の有無等)を検証するために使用する。</summary>
+    public List<(string Method, string Collection)> Calls { get; } = [];
+
+    public Task<List<FirestoreDocument>> ListDocumentsAsync(string collection, CancellationToken ct = default)
+    {
+        Calls.Add(("List", collection));
+        return Task.FromResult(GetCollection(collection)
             .Select(kv => new FirestoreDocument { Id = kv.Key, Fields = new Dictionary<string, object?>(kv.Value) })
             .ToList());
+    }
 
     public Task<FirestoreDocument?> GetDocumentAsync(string collection, string documentId, CancellationToken ct = default)
     {
+        Calls.Add(("Get", collection));
         var found = GetCollection(collection).TryGetValue(documentId, out var fields)
             ? new FirestoreDocument { Id = documentId, Fields = new Dictionary<string, object?>(fields) }
             : null;
         return Task.FromResult(found);
+    }
+
+    public Task<List<FirestoreDocument>> QueryDocumentsAsync(string collection, IReadOnlyDictionary<string, object?> equalsFilters, CancellationToken ct = default)
+    {
+        Calls.Add(("Query", collection));
+        var matches = GetCollection(collection)
+            .Where(kv => equalsFilters.All(f => kv.Value.TryGetValue(f.Key, out var v) && Equals(v, f.Value)))
+            .Select(kv => new FirestoreDocument { Id = kv.Key, Fields = new Dictionary<string, object?>(kv.Value) })
+            .ToList();
+        return Task.FromResult(matches);
     }
 
     public Task UpsertDocumentAsync(string collection, string documentId, Dictionary<string, object?> fields, CancellationToken ct = default)

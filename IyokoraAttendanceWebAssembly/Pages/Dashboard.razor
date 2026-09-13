@@ -99,6 +99,8 @@
 @code {
     private List<PartSummary> _partSummaries = [];
     private Practice? _nextPractice;
+    private List<Member> _members = [];
+    private List<Attendance> _attendances = [];
     private AttendanceStatus _myStatus = AttendanceStatus.Undecided;
     private bool _isTimelineModalVisible;
     private int _totalAttending;
@@ -116,56 +118,13 @@
         try
         {
             var practice = await PracticeService.GetNextUpcomingAsync();
-            var members = await MemberService.GetAllAsync();
-
             _nextPractice = practice;
-            _totalMembers = members.Count;
-            _partSummaries = [];
+            _members = await MemberService.GetAllAsync();
+            _attendances = practice is null
+                ? []
+                : await AttendanceService.GetForPracticeAsync(practice.Id);
 
-            if (practice is null)
-            {
-                _totalAttending = 0;
-                _totalResponded = 0;
-                _myStatus = AttendanceStatus.Undecided;
-                return;
-            }
-
-            var attendances = await AttendanceService.GetForPracticeAsync(practice.Id);
-            var mine = attendances.FirstOrDefault(a => a.MemberId == Profile.MemberId);
-            _myStatus = mine?.Status ?? AttendanceStatus.Undecided;
-
-            var attendingByPart = attendances
-                .Where(a => a.Status == AttendanceStatus.Attending)
-                .GroupBy(a => a.Part)
-                .ToDictionary(g => g.Key, g => g.Count());
-
-            var attendingNamesByPart = attendances
-                .Where(a => a.Status == AttendanceStatus.Attending)
-                .GroupBy(a => a.Part)
-                .ToDictionary(
-                    g => g.Key,
-                    g => (IReadOnlyList<string>)g.Select(a => a.MemberName).OrderBy(n => n, StringComparer.CurrentCultureIgnoreCase).ToList());
-
-            var membersByPart = members.GroupBy(m => m.Part).ToDictionary(g => g.Key, g => g.Count());
-
-            var summaries = new List<PartSummary>();
-            foreach (var part in PartTypeExtensions.All)
-            {
-                summaries.Add(new PartSummary
-                {
-                    Part = part,
-                    Label = part.ToDisplayName(),
-                    ColorHex = part.ToColorHex(),
-                    CardBackgroundColorHex = part.ToCardBackgroundColorHex(),
-                    AttendingCount = attendingByPart.GetValueOrDefault(part),
-                    MemberCount = membersByPart.GetValueOrDefault(part),
-                    AttendeeNames = attendingNamesByPart.GetValueOrDefault(part) ?? []
-                });
-            }
-            _partSummaries = summaries;
-
-            _totalAttending = attendingByPart.Values.Sum();
-            _totalResponded = attendances.Count(a => a.Status != AttendanceStatus.Undecided);
+            RecomputeSummaries();
         }
         catch (Exception ex)
         {
@@ -177,6 +136,61 @@
         }
     }
 
+    /// <summary>
+    /// 既に読み込み済みの <see cref="_nextPractice"/>・<see cref="_members"/>・<see cref="_attendances"/> から
+    /// 画面表示用の集計値を再計算する。出欠の変更後にFirestoreへ再度問い合わせずに済むよう、
+    /// ローカルに保持したデータのみを使って呼び出せるようにしている。
+    /// </summary>
+    private void RecomputeSummaries()
+    {
+        _totalMembers = _members.Count;
+        _partSummaries = [];
+
+        if (_nextPractice is null)
+        {
+            _totalAttending = 0;
+            _totalResponded = 0;
+            _myStatus = AttendanceStatus.Undecided;
+            return;
+        }
+
+        var mine = _attendances.FirstOrDefault(a => a.MemberId == Profile.MemberId);
+        _myStatus = mine?.Status ?? AttendanceStatus.Undecided;
+
+        var attendingByPart = _attendances
+            .Where(a => a.Status == AttendanceStatus.Attending)
+            .GroupBy(a => a.Part)
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        var attendingNamesByPart = _attendances
+            .Where(a => a.Status == AttendanceStatus.Attending)
+            .GroupBy(a => a.Part)
+            .ToDictionary(
+                g => g.Key,
+                g => (IReadOnlyList<string>)g.Select(a => a.MemberName).OrderBy(n => n, StringComparer.CurrentCultureIgnoreCase).ToList());
+
+        var membersByPart = _members.GroupBy(m => m.Part).ToDictionary(g => g.Key, g => g.Count());
+
+        var summaries = new List<PartSummary>();
+        foreach (var part in PartTypeExtensions.All)
+        {
+            summaries.Add(new PartSummary
+            {
+                Part = part,
+                Label = part.ToDisplayName(),
+                ColorHex = part.ToColorHex(),
+                CardBackgroundColorHex = part.ToCardBackgroundColorHex(),
+                AttendingCount = attendingByPart.GetValueOrDefault(part),
+                MemberCount = membersByPart.GetValueOrDefault(part),
+                AttendeeNames = attendingNamesByPart.GetValueOrDefault(part) ?? []
+            });
+        }
+        _partSummaries = summaries;
+
+        _totalAttending = attendingByPart.Values.Sum();
+        _totalResponded = _attendances.Count(a => a.Status != AttendanceStatus.Undecided);
+    }
+
     private async Task SetMyStatusAsync(AttendanceStatus status)
     {
         if (_nextPractice is null)
@@ -185,7 +199,30 @@
         try
         {
             await AttendanceService.SetStatusAsync(_nextPractice.Id, Profile.MemberId, Profile.Name, Profile.Part, status);
-            await LoadAsync();
+
+            var mine = _attendances.FirstOrDefault(a => a.MemberId == Profile.MemberId);
+            if (mine is null)
+            {
+                _attendances.Add(new Attendance
+                {
+                    Id = Attendance.BuildId(_nextPractice.Id, Profile.MemberId),
+                    PracticeId = _nextPractice.Id,
+                    MemberId = Profile.MemberId,
+                    MemberName = Profile.Name,
+                    Part = Profile.Part,
+                    Status = status,
+                    UpdatedAt = DateTime.UtcNow
+                });
+            }
+            else
+            {
+                mine.Status = status;
+                mine.MemberName = Profile.Name;
+                mine.Part = Profile.Part;
+                mine.UpdatedAt = DateTime.UtcNow;
+            }
+
+            RecomputeSummaries();
         }
         catch (Exception ex)
         {

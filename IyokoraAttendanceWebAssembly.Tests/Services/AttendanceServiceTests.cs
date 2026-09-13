@@ -23,10 +23,15 @@ public class AttendanceServiceTests
 
     private static (AttendanceService service, Mock<IFirestoreClient> client) CreateService(IEnumerable<FirestoreDocument>? docs = null)
     {
+        var list = (docs ?? []).ToList();
         var clientMock = new Mock<IFirestoreClient>();
         clientMock
-            .Setup(c => c.ListDocumentsAsync("attendances", It.IsAny<CancellationToken>()))
-            .ReturnsAsync((docs ?? []).ToList());
+            .Setup(c => c.QueryDocumentsAsync("attendances", It.IsAny<IReadOnlyDictionary<string, object?>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string _, IReadOnlyDictionary<string, object?> filters, CancellationToken _) =>
+                list.Where(d => filters.All(f => d.Fields.TryGetValue(f.Key, out var v) && Equals(v, f.Value))).ToList());
+        clientMock
+            .Setup(c => c.GetDocumentAsync("attendances", It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string _, string id, CancellationToken _) => list.FirstOrDefault(d => d.Id == id));
         clientMock
             .Setup(c => c.UpsertDocumentAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Dictionary<string, object?>>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
@@ -53,7 +58,7 @@ public class AttendanceServiceTests
     [Fact]
     public async Task 指定メンバーの出欠が見つからない場合はnullが返る()
     {
-        var docs = new[] { CreateAttendanceDoc("a1", "practice1", "m1", AttendanceStatus.Attending) };
+        var docs = new[] { CreateAttendanceDoc(Attendance.BuildId("practice1", "m1"), "practice1", "m1", AttendanceStatus.Attending) };
         var (service, _) = CreateService(docs);
 
         var mine = await service.GetForMemberAsync("practice1", "m2");
@@ -64,13 +69,41 @@ public class AttendanceServiceTests
     [Fact]
     public async Task 指定メンバーの出欠が見つかる場合はその内容が返る()
     {
-        var docs = new[] { CreateAttendanceDoc("a1", "practice1", "m1", AttendanceStatus.NotAttending) };
+        var docs = new[] { CreateAttendanceDoc(Attendance.BuildId("practice1", "m1"), "practice1", "m1", AttendanceStatus.NotAttending) };
         var (service, _) = CreateService(docs);
 
         var mine = await service.GetForMemberAsync("practice1", "m1");
 
         Assert.NotNull(mine);
         Assert.Equal(AttendanceStatus.NotAttending, mine!.Status);
+    }
+
+    [Fact]
+    public async Task 指定メンバーの出欠取得はコレクション全体を取得せず複合キーで直接1件取得する()
+    {
+        var docs = new[] { CreateAttendanceDoc(Attendance.BuildId("practice1", "m1"), "practice1", "m1", AttendanceStatus.Attending) };
+        var (service, client) = CreateService(docs);
+
+        await service.GetForMemberAsync("practice1", "m1");
+
+        client.Verify(c => c.GetDocumentAsync("attendances", Attendance.BuildId("practice1", "m1"), It.IsAny<CancellationToken>()), Times.Once);
+        client.Verify(c => c.ListDocumentsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        client.Verify(c => c.QueryDocumentsAsync(It.IsAny<string>(), It.IsAny<IReadOnlyDictionary<string, object?>>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task 練習の出欠一覧取得はコレクション全体を取得せずgroupIdと練習IDで絞り込む()
+    {
+        var docs = new[] { CreateAttendanceDoc("a1", "practice1", "m1", AttendanceStatus.Attending) };
+        var (service, client) = CreateService(docs);
+
+        await service.GetForPracticeAsync("practice1");
+
+        client.Verify(c => c.QueryDocumentsAsync(
+            "attendances",
+            It.Is<IReadOnlyDictionary<string, object?>>(f => (string)f["groupId"]! == FirebaseOptions.GroupId && (string)f["practiceId"]! == "practice1"),
+            It.IsAny<CancellationToken>()), Times.Once);
+        client.Verify(c => c.ListDocumentsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]

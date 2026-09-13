@@ -212,6 +212,71 @@ public class FirestoreClientTests
     }
 
     [Fact]
+    public async Task 絞り込み取得でrunQueryへの複合フィルタが構築され結果が解析される()
+    {
+        var (client, handler) = CreateClient();
+        HttpRequestMessage? capturedRequest = null;
+        string? capturedBody = null;
+
+        var json = """
+        [
+          {
+            "document": {
+              "name": "projects/p/databases/(default)/documents/attendances/practice1_m1",
+              "fields": { "practiceId": { "stringValue": "practice1" }, "memberId": { "stringValue": "m1" } }
+            },
+            "readTime": "2026-01-01T00:00:00.000Z"
+          },
+          { "readTime": "2026-01-01T00:00:00.000Z" }
+        ]
+        """;
+
+        handler
+            .Protected()
+            .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
+            .Callback<HttpRequestMessage, CancellationToken>((req, _) =>
+            {
+                capturedRequest = req;
+                capturedBody = req.Content?.ReadAsStringAsync().GetAwaiter().GetResult();
+            })
+            .ReturnsAsync(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") });
+
+        var docs = await client.QueryDocumentsAsync("attendances", new Dictionary<string, object?>
+        {
+            ["groupId"] = "default",
+            ["practiceId"] = "practice1"
+        });
+
+        Assert.Equal(HttpMethod.Post, capturedRequest!.Method);
+        Assert.EndsWith(":runQuery", capturedRequest.RequestUri!.ToString());
+
+        var body = JsonNode.Parse(capturedBody!)!;
+        var filters = body["structuredQuery"]!["where"]!["compositeFilter"]!["filters"]!.AsArray();
+        Assert.Equal("AND", body["structuredQuery"]!["where"]!["compositeFilter"]!["op"]!.GetValue<string>());
+        Assert.Equal("attendances", body["structuredQuery"]!["from"]![0]!["collectionId"]!.GetValue<string>());
+        Assert.Contains(filters, f => f!["fieldFilter"]!["field"]!["fieldPath"]!.GetValue<string>() == "groupId"
+            && f["fieldFilter"]!["value"]!["stringValue"]!.GetValue<string>() == "default");
+        Assert.Contains(filters, f => f!["fieldFilter"]!["field"]!["fieldPath"]!.GetValue<string>() == "practiceId"
+            && f["fieldFilter"]!["value"]!["stringValue"]!.GetValue<string>() == "practice1");
+
+        // ドキュメントを含まないエントリ(readTimeのみ)は無視され、一致した1件のみが返る。
+        Assert.Single(docs);
+        Assert.Equal("practice1_m1", docs[0].Id);
+        Assert.Equal("practice1", docs[0].GetString("practiceId"));
+    }
+
+    [Fact]
+    public async Task 絞り込み取得で一致する結果が無い場合は空リストが返る()
+    {
+        var (client, handler) = CreateClient();
+        SetupResponse(handler, HttpMethod.Post, ":runQuery", HttpStatusCode.OK, "[]");
+
+        var docs = await client.QueryDocumentsAsync("attendances", new Dictionary<string, object?> { ["practiceId"] = "practice1" });
+
+        Assert.Empty(docs);
+    }
+
+    [Fact]
     public async Task ドキュメント削除で存在しない場合は例外にならない()
     {
         var (client, handler) = CreateClient();

@@ -62,16 +62,22 @@ public class MemberService(IFirestoreClient client, NameCipher nameCipher, ILogg
         return loginId;
     }
 
-    /// <summary>指定ログインIDに一致するメンバーを取得する。見つからない場合は null。</summary>
+    /// <summary>
+    /// 指定ログインIDに一致するメンバーを取得する。見つからない場合は null。
+    /// メンバー全件を取得せず、サーバー側でログインID一致の絞り込みを行う。
+    /// </summary>
     /// <param name="loginId">ログインID（前後空白の有無や大文字小文字は問わない）。</param>
     /// <param name="ct">キャンセルトークン。</param>
     public async Task<Member?> FindByLoginIdAsync(string loginId, CancellationToken ct = default)
     {
         var normalized = LoginIdGenerator.Normalize(loginId);
-        var docs = await client.ListDocumentsAsync(Collection, ct);
-        var doc = docs.FirstOrDefault(d =>
-            d.GetString("groupId") == FirebaseOptions.GroupId &&
-            d.GetString("loginId") == normalized);
+        var filters = new Dictionary<string, object?>
+        {
+            ["groupId"] = FirebaseOptions.GroupId,
+            ["loginId"] = normalized
+        };
+        var docs = await client.QueryDocumentsAsync(Collection, filters, ct);
+        var doc = docs.FirstOrDefault();
 
         return doc is null ? null : await ToMemberAsync(doc);
     }

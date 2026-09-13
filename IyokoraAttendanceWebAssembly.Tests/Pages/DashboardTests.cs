@@ -85,6 +85,21 @@ public class DashboardTests : BunitContext
     }
 
     [Fact]
+    public void 出欠ボタンをタップしても出欠_メンバー_練習の再取得は発生しない()
+    {
+        var (client, _) = RegisterServices();
+        client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3)));
+        client.Seed("members", "me", Seed.Member("自分", PartType.Soprano));
+
+        var cut = Render<Dashboard>();
+        var callsAfterLoad = client.Calls.Count;
+
+        cut.Find("button.attend-yes").Click();
+
+        Assert.Equal(callsAfterLoad, client.Calls.Count);
+    }
+
+    [Fact]
     public void ハイライトカードをタップするとタイムスケジュールのモーダルが開く()
     {
         var (client, _) = RegisterServices();
