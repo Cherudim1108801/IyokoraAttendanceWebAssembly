@@ -71,6 +71,64 @@ public class FirestoreClient(HttpClient http, ILogger<FirestoreClient> logger, I
         return node is null ? null : ParseDocument(node, collection);
     }
 
+    /// <summary>
+    /// 指定コレクション内から、フィールドの完全一致条件（複数指定時は AND）に合致するドキュメントのみを
+    /// サーバー側で絞り込んで取得する。<see cref="ListDocumentsAsync"/> と異なりコレクション全体を
+    /// 転送しないため、絞り込み後の件数が少ない場合は通信量を大きく削減できる。
+    /// </summary>
+    /// <param name="collection">コレクション名。</param>
+    /// <param name="equalsFilters">「フィールド名 = 値」の一致条件。</param>
+    /// <param name="ct">キャンセルトークン。</param>
+    public async Task<List<FirestoreDocument>> QueryDocumentsAsync(string collection, IReadOnlyDictionary<string, object?> equalsFilters, CancellationToken ct = default)
+    {
+        var filters = new JsonArray(equalsFilters
+            .Select(kv => (JsonNode)new JsonObject
+            {
+                ["fieldFilter"] = new JsonObject
+                {
+                    ["field"] = new JsonObject { ["fieldPath"] = kv.Key },
+                    ["op"] = "EQUAL",
+                    ["value"] = ToFirestoreValue(kv.Value)
+                }
+            })
+            .ToArray());
+
+        var body = new JsonObject
+        {
+            ["structuredQuery"] = new JsonObject
+            {
+                ["from"] = new JsonArray(new JsonObject { ["collectionId"] = collection }),
+                ["where"] = new JsonObject
+                {
+                    ["compositeFilter"] = new JsonObject
+                    {
+                        ["op"] = "AND",
+                        ["filters"] = filters
+                    }
+                }
+            }
+        };
+
+        var url = $"{FirebaseOptions.FirestoreBaseUrl}:runQuery";
+        using var content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json");
+        using var request = new HttpRequestMessage(HttpMethod.Post, url) { Content = content };
+        await AttachAppCheckHeaderAsync(request);
+        using var resp = await http.SendAsync(request, ct);
+        resp.EnsureSuccessStatusCode();
+
+        var json = await resp.Content.ReadAsStringAsync(ct);
+        var results = new List<FirestoreDocument>();
+        if (JsonNode.Parse(json) is JsonArray entries)
+        {
+            foreach (var entry in entries)
+            {
+                if (entry?["document"] is JsonObject docObj)
+                    results.Add(ParseDocument(docObj, collection));
+            }
+        }
+        return results;
+    }
+
     /// <summary>指定IDのドキュメントを作成または上書き保存する（存在しなければ新規作成）。</summary>
     /// <param name="collection">コレクション名。</param>
     /// <param name="documentId">ドキュメントID。</param>

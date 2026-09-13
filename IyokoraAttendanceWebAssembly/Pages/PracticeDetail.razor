@@ -281,6 +281,8 @@
     private List<TimelineItemInput> _editTimelineItems = [];
 
     private List<Piece> _pieces = [];
+    private List<Member> _members = [];
+    private List<Attendance> _attendances = [];
     private bool _isPiecesEditPanelVisible;
     private List<PieceSelectionInput> _editPieceInputs = [];
 
@@ -296,97 +298,11 @@
         try
         {
             _practice = await PracticeService.GetByIdAsync(PracticeId);
-            _isAttendanceEditable = _practice is null || _practice.Date.Date >= DateTime.Today;
-            var members = await MemberService.GetAllAsync();
-            var pieces = await PieceService.GetAllAsync(includeArchived: true);
-            _pieces = pieces;
-            var attendances = await AttendanceService.GetForPracticeAsync(PracticeId);
-            var statusByMemberId = attendances.ToDictionary(a => a.MemberId, a => a.Status);
+            _members = await MemberService.GetAllAsync();
+            _pieces = await PieceService.GetAllAsync(includeArchived: true);
+            _attendances = await AttendanceService.GetForPracticeAsync(PracticeId);
 
-            _myStatus = statusByMemberId.GetValueOrDefault(Profile.MemberId, AttendanceStatus.Undecided);
-            _totalMembers = members.Count;
-            _totalAttending = attendances.Count(a => a.Status == AttendanceStatus.Attending);
-
-            var attendingByPart = attendances
-                .Where(a => a.Status == AttendanceStatus.Attending)
-                .GroupBy(a => a.Part)
-                .ToDictionary(g => g.Key, g => g.Count());
-
-            var attendingNamesByPart = attendances
-                .Where(a => a.Status == AttendanceStatus.Attending)
-                .GroupBy(a => a.Part)
-                .ToDictionary(
-                    g => g.Key,
-                    g => (IReadOnlyList<string>)g.Select(a => a.MemberName).OrderBy(n => n, StringComparer.CurrentCultureIgnoreCase).ToList());
-
-            var membersByPart = members.GroupBy(m => m.Part).ToDictionary(g => g.Key, g => g.Count());
-
-            var summaries = new List<PartSummary>();
-            foreach (var part in PartTypeExtensions.All)
-            {
-                summaries.Add(new PartSummary
-                {
-                    Part = part,
-                    Label = part.ToDisplayName(),
-                    ColorHex = part.ToColorHex(),
-                    CardBackgroundColorHex = part.ToCardBackgroundColorHex(),
-                    AttendingCount = attendingByPart.GetValueOrDefault(part),
-                    MemberCount = membersByPart.GetValueOrDefault(part),
-                    AttendeeNames = attendingNamesByPart.GetValueOrDefault(part) ?? []
-                });
-            }
-            _partSummaries = summaries;
-
-            var attendingMembers = members
-                .Where(m => statusByMemberId.GetValueOrDefault(m.Id) == AttendanceStatus.Attending)
-                .OrderBy(m => m.Part)
-                .ThenBy(m => m.Name, StringComparer.CurrentCultureIgnoreCase)
-                .ToList();
-
-            var piecesById = pieces.ToDictionary(p => p.Id);
-
-            var songs = new List<SongParticipation>();
-            foreach (var pieceRef in _practice?.Pieces ?? [])
-            {
-                piecesById.TryGetValue(pieceRef.PieceId, out var piece);
-
-                var dots = new List<ParticipationDot>();
-                PartType? previousPart = null;
-                foreach (var member in attendingMembers)
-                {
-                    var assignment = piece?.PartAssignments.FirstOrDefault(a => a.Part == member.Part);
-                    string? subLabel = null;
-                    if (assignment is { Division: PartDivision.UpperLower })
-                    {
-                        var subPart = member.PieceParts.FirstOrDefault(p => p.PieceId == pieceRef.PieceId)?.SubPart;
-                        var labels = assignment.SubPartLabels;
-                        if (subPart == labels[0])
-                            subLabel = "上";
-                        else if (subPart == labels[1])
-                            subLabel = "下";
-                    }
-
-                    dots.Add(new ParticipationDot
-                    {
-                        ColorHex = member.Part.ToCardBackgroundColorHex(),
-                        SubLabel = subLabel,
-                        Margin = previousPart is not null && previousPart != member.Part
-                            ? "4px 4px 4px 14px"
-                            : "4px"
-                    });
-                    previousPart = member.Part;
-                }
-
-                songs.Add(new SongParticipation
-                {
-                    PieceId = pieceRef.PieceId,
-                    Title = pieceRef.Title,
-                    Dots = dots,
-                    RecordingUrl = pieceRef.RecordingUrl,
-                    IsFeatured = pieceRef.IsFeatured
-                });
-            }
-            _songParticipations = songs;
+            RecomputeDerived();
         }
         catch (Exception ex)
         {
@@ -398,6 +314,103 @@
         }
     }
 
+    /// <summary>
+    /// 既に読み込み済みの <see cref="_practice"/>・<see cref="_members"/>・<see cref="_pieces"/>・<see cref="_attendances"/> から
+    /// 画面表示用の集計値・参加状況を再計算する。出欠変更や各種編集の保存後にFirestoreへ再度問い合わせずに済むよう、
+    /// ローカルに保持したデータのみを使って呼び出せるようにしている。
+    /// </summary>
+    private void RecomputeDerived()
+    {
+        _isAttendanceEditable = _practice is null || _practice.Date.Date >= DateTime.Today;
+
+        var statusByMemberId = _attendances.ToDictionary(a => a.MemberId, a => a.Status);
+
+        _myStatus = statusByMemberId.GetValueOrDefault(Profile.MemberId, AttendanceStatus.Undecided);
+        _totalMembers = _members.Count;
+        _totalAttending = _attendances.Count(a => a.Status == AttendanceStatus.Attending);
+
+        var attendingByPart = _attendances
+            .Where(a => a.Status == AttendanceStatus.Attending)
+            .GroupBy(a => a.Part)
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        var attendingNamesByPart = _attendances
+            .Where(a => a.Status == AttendanceStatus.Attending)
+            .GroupBy(a => a.Part)
+            .ToDictionary(
+                g => g.Key,
+                g => (IReadOnlyList<string>)g.Select(a => a.MemberName).OrderBy(n => n, StringComparer.CurrentCultureIgnoreCase).ToList());
+
+        var membersByPart = _members.GroupBy(m => m.Part).ToDictionary(g => g.Key, g => g.Count());
+
+        var summaries = new List<PartSummary>();
+        foreach (var part in PartTypeExtensions.All)
+        {
+            summaries.Add(new PartSummary
+            {
+                Part = part,
+                Label = part.ToDisplayName(),
+                ColorHex = part.ToColorHex(),
+                CardBackgroundColorHex = part.ToCardBackgroundColorHex(),
+                AttendingCount = attendingByPart.GetValueOrDefault(part),
+                MemberCount = membersByPart.GetValueOrDefault(part),
+                AttendeeNames = attendingNamesByPart.GetValueOrDefault(part) ?? []
+            });
+        }
+        _partSummaries = summaries;
+
+        var attendingMembers = _members
+            .Where(m => statusByMemberId.GetValueOrDefault(m.Id) == AttendanceStatus.Attending)
+            .OrderBy(m => m.Part)
+            .ThenBy(m => m.Name, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+
+        var piecesById = _pieces.ToDictionary(p => p.Id);
+
+        var songs = new List<SongParticipation>();
+        foreach (var pieceRef in _practice?.Pieces ?? [])
+        {
+            piecesById.TryGetValue(pieceRef.PieceId, out var piece);
+
+            var dots = new List<ParticipationDot>();
+            PartType? previousPart = null;
+            foreach (var member in attendingMembers)
+            {
+                var assignment = piece?.PartAssignments.FirstOrDefault(a => a.Part == member.Part);
+                string? subLabel = null;
+                if (assignment is { Division: PartDivision.UpperLower })
+                {
+                    var subPart = member.PieceParts.FirstOrDefault(p => p.PieceId == pieceRef.PieceId)?.SubPart;
+                    var labels = assignment.SubPartLabels;
+                    if (subPart == labels[0])
+                        subLabel = "上";
+                    else if (subPart == labels[1])
+                        subLabel = "下";
+                }
+
+                dots.Add(new ParticipationDot
+                {
+                    ColorHex = member.Part.ToCardBackgroundColorHex(),
+                    SubLabel = subLabel,
+                    Margin = previousPart is not null && previousPart != member.Part
+                        ? "4px 4px 4px 14px"
+                        : "4px"
+                });
+                previousPart = member.Part;
+            }
+
+            songs.Add(new SongParticipation
+            {
+                PieceId = pieceRef.PieceId,
+                Title = pieceRef.Title,
+                Dots = dots,
+                RecordingUrl = pieceRef.RecordingUrl,
+                IsFeatured = pieceRef.IsFeatured
+            });
+        }
+        _songParticipations = songs;
+    }
+
     private async Task SetMyStatusAsync(AttendanceStatus status)
     {
         if (_practice is null || !_isAttendanceEditable)
@@ -406,7 +419,11 @@
         try
         {
             await AttendanceService.SetStatusAsync(_practice.Id, Profile.MemberId, Profile.Name, Profile.Part, status);
-            await LoadAsync();
+
+            // メンバー一覧・曲一覧・練習予定は変化しないためそのまま使い回し、出欠だけをサーバー側で絞り込み再取得する。
+            // こうすることで、自分の変更と同時に他メンバーが行った出欠変更も画面に反映される。
+            _attendances = await AttendanceService.GetForPracticeAsync(_practice.Id);
+            RecomputeDerived();
         }
         catch (Exception ex)
         {
@@ -433,10 +450,15 @@
             return;
         }
 
+        var recordingUrl = trimmed.Length > 0 ? trimmed : null;
+        var updatedPieces = BuildUpdatedPieces(song.PieceId, p => new PracticePieceRef { PieceId = p.PieceId, Title = p.Title, RecordingUrl = recordingUrl, IsFeatured = p.IsFeatured });
         try
         {
-            await PracticeService.SetPieceRecordingUrlAsync(_practice.Id, song.PieceId, trimmed.Length > 0 ? trimmed : null);
-            await LoadAsync();
+            // 対象の曲だけを更新した完全な演奏予定曲一覧を渡すことで、PracticeService 側での
+            // （保存前に現在の練習を読み直す）追加の取得を発生させずに保存する。
+            await PracticeService.UpdatePiecesAsync(_practice.Id, updatedPieces);
+            _practice.Pieces = updatedPieces;
+            RecomputeDerived();
         }
         catch (Exception ex)
         {
@@ -449,16 +471,25 @@
         if (Profile.Role != Role.Admin || _practice is null || !song.HasRecordingUrl)
             return;
 
+        var isFeatured = !song.IsFeatured;
+        var updatedPieces = BuildUpdatedPieces(song.PieceId, p => new PracticePieceRef { PieceId = p.PieceId, Title = p.Title, RecordingUrl = p.RecordingUrl, IsFeatured = isFeatured });
         try
         {
-            await PracticeService.SetPieceRecordingFeaturedAsync(_practice.Id, song.PieceId, !song.IsFeatured);
-            await LoadAsync();
+            await PracticeService.UpdatePiecesAsync(_practice.Id, updatedPieces);
+            _practice.Pieces = updatedPieces;
+            RecomputeDerived();
         }
         catch (Exception ex)
         {
             _errorMessage = $"更新に失敗しました。({ex.Message})";
         }
     }
+
+    /// <summary>
+    /// <see cref="_practice"/> の演奏予定曲一覧のうち、指定した曲IDのエントリだけを差し替えた新しい一覧を組み立てる。
+    /// </summary>
+    private List<PracticePieceRef> BuildUpdatedPieces(string pieceId, Func<PracticePieceRef, PracticePieceRef> update) =>
+        _practice!.Pieces.Select(p => p.PieceId == pieceId ? update(p) : p).ToList();
 
     private void OpenScheduleEditPanel()
     {
@@ -514,8 +545,11 @@
             var startTime = _editStartTime?.ToString("HH:mm") ?? string.Empty;
             var endTime = _editEndTime?.ToString("HH:mm") ?? string.Empty;
             await PracticeService.UpdateScheduleAsync(_practice.Id, startTime, endTime, timelineItems);
+
+            _practice.StartTime = startTime;
+            _practice.EndTime = endTime;
+            _practice.TimelineItems = timelineItems;
             _isScheduleEditPanelVisible = false;
-            await LoadAsync();
         }
         catch (Exception ex)
         {
@@ -550,8 +584,10 @@
         try
         {
             await PracticeService.UpdatePiecesAsync(_practice.Id, updatedPieces);
+
+            _practice.Pieces = updatedPieces;
             _isPiecesEditPanelVisible = false;
-            await LoadAsync();
+            RecomputeDerived();
         }
         catch (Exception ex)
         {
@@ -584,10 +620,13 @@
         if (Profile.Role != Role.Admin || _practice is null)
             return;
 
+        var keyPickedUp = !_practice.KeyPickedUp;
         try
         {
-            await PracticeService.SetKeyPickedUpAsync(_practice.Id, !_practice.KeyPickedUp, Profile.Name);
-            await LoadAsync();
+            await PracticeService.SetKeyPickedUpAsync(_practice.Id, keyPickedUp, Profile.Name);
+
+            _practice.KeyPickedUp = keyPickedUp;
+            _practice.KeyPickedUpByName = KeyPickupRecorder.ResolveRecordedName(keyPickedUp, Profile.Name) ?? string.Empty;
         }
         catch (Exception ex)
         {
