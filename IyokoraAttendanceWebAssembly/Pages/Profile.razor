@@ -11,6 +11,20 @@
         <label>ログインID</label>
         <p style="font-weight:bold;font-size:18px;letter-spacing:1px;">@ProfileStore.LoginId</p>
         <p class="hint-text">他の端末でこのアプリを使う場合は、このIDでログインしてください。</p>
+
+        @if (_reissuedLoginId is not null)
+        {
+            <div class="highlight-card" style="text-align:center;margin-top:8px;">
+                <div class="highlight-card-label">新しいログインID</div>
+                <div style="font-size:24px;font-weight:bold;letter-spacing:2px;">@_reissuedLoginId</div>
+                <p class="hint-text">古いIDは使えなくなりました。他の端末でも、この新しいIDでログインし直してください。</p>
+            </div>
+        }
+        else if (_isLegacyLoginId)
+        {
+            <p class="hint-text">このIDは旧形式です。新形式のIDに更新できます。</p>
+            <button class="iyk-btn iyk-btn-block" disabled="@_isBusy" @onclick="ReissueLoginIdAsync">ログインIDを更新する</button>
+        }
     </div>
 
     <div class="field">
@@ -98,7 +112,12 @@
     private Role _selectedRole;
     private string? _errorMessage;
     private string? _savedMessage;
+    private string? _reissuedLoginId;
     private bool _isBusy;
+
+    private bool _isLegacyLoginId =>
+        !string.IsNullOrEmpty(ProfileStore.LoginId)
+        && !ProfileStore.LoginId.StartsWith(FirebaseOptions.LoginIdPrefix, StringComparison.Ordinal);
 
     private PartType _selectedPartValue
     {
@@ -196,6 +215,33 @@
         catch (Exception ex)
         {
             _errorMessage = $"保存に失敗しました。({ex.Message})";
+        }
+        finally
+        {
+            _isBusy = false;
+        }
+    }
+
+    private async Task ReissueLoginIdAsync()
+    {
+        var confirmed = await JS.InvokeAsync<bool>("confirm",
+            "ログインIDを新しい形式に更新します。古いIDは使えなくなり、他の端末でログインし直す必要があります。よろしいですか？");
+
+        if (!confirmed)
+            return;
+
+        _isBusy = true;
+        _errorMessage = null;
+        _savedMessage = null;
+        try
+        {
+            var newLoginId = await MemberService.ReissueLoginIdAsync(ProfileStore.MemberId);
+            ProfileStore.LoginId = newLoginId;
+            _reissuedLoginId = newLoginId;
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"ログインIDの更新に失敗しました。({ex.Message})";
         }
         finally
         {

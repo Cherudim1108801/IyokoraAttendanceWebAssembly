@@ -91,6 +91,52 @@ public class ProfileTests : BunitContext
     }
 
     [Fact]
+    public void 旧プレフィックスのログインIDの場合は更新ボタンが表示される()
+    {
+        RegisterServices();
+
+        var cut = Render<Profile>();
+
+        Assert.Contains("ログインIDを更新する", cut.Markup);
+    }
+
+    [Fact]
+    public void 現在のプレフィックスのログインIDの場合は更新ボタンが表示されない()
+    {
+        var (_, profile) = RegisterServices();
+        profile.LoginId = FirebaseOptions.LoginIdPrefix + "1234";
+
+        var cut = Render<Profile>();
+
+        Assert.DoesNotContain("ログインIDを更新する", cut.Markup);
+    }
+
+    [Fact]
+    public void ログインID更新ボタンで確認ダイアログを承認すると新しいIDが発行され端末にも保存される()
+    {
+        var (_, profile) = RegisterServices(confirmSwitch: true);
+        var cut = Render<Profile>();
+
+        cut.Find("button.iyk-btn:not(.iyk-btn-primary):not(.iyk-btn-outline-danger)").Click();
+
+        Assert.StartsWith(FirebaseOptions.LoginIdPrefix, profile.LoginId, StringComparison.Ordinal);
+        Assert.Contains("新しいログインID", cut.Markup);
+        Assert.Contains(profile.LoginId, cut.Markup);
+    }
+
+    [Fact]
+    public void ログインID更新ボタンで確認ダイアログを拒否すると何も変わらない()
+    {
+        var (_, profile) = RegisterServices(confirmSwitch: false);
+        var cut = Render<Profile>();
+
+        cut.Find("button.iyk-btn:not(.iyk-btn-primary):not(.iyk-btn-outline-danger)").Click();
+
+        Assert.Equal("IK1234", profile.LoginId);
+        Assert.DoesNotContain("新しいログインID", cut.Markup);
+    }
+
+    [Fact]
     public void 別のプロフィールを使うで確認ダイアログを承認すると端末情報がクリアされオンボーディングへ遷移する()
     {
         var (_, profile) = RegisterServices(confirmSwitch: true);

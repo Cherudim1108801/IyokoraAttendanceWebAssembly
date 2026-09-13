@@ -82,6 +82,25 @@ public class MemberService(IFirestoreClient client, NameCipher nameCipher, ILogg
         return doc is null ? null : await ToMemberAsync(doc);
     }
 
+    /// <summary>
+    /// 指定メンバーのログインIDを、現在の <see cref="FirebaseOptions.LoginIdPrefix"/> を使って新規に発行し直す。
+    /// 団体プレフィックス変更後、旧プレフィックスのIDを使い続けているメンバーが
+    /// 本人の操作で新プレフィックスへ移行するために使用する。
+    /// </summary>
+    /// <param name="memberId">対象メンバーの MemberId。</param>
+    /// <param name="ct">キャンセルトークン。</param>
+    /// <returns>新しく発行されたログインID。</returns>
+    public async Task<string> ReissueLoginIdAsync(string memberId, CancellationToken ct = default)
+    {
+        var newLoginId = await GenerateUniqueLoginIdAsync(ct);
+        await client.UpsertDocumentAsync(Collection, memberId, new Dictionary<string, object?>
+        {
+            ["loginId"] = newLoginId,
+            ["updatedAt"] = DateTime.UtcNow
+        }, ct);
+        return newLoginId;
+    }
+
     private async Task<string> GenerateUniqueLoginIdAsync(CancellationToken ct)
     {
         var docs = await client.ListDocumentsAsync(Collection, ct);
