@@ -200,28 +200,9 @@
         {
             await AttendanceService.SetStatusAsync(_nextPractice.Id, Profile.MemberId, Profile.Name, Profile.Part, status);
 
-            var mine = _attendances.FirstOrDefault(a => a.MemberId == Profile.MemberId);
-            if (mine is null)
-            {
-                _attendances.Add(new Attendance
-                {
-                    Id = Attendance.BuildId(_nextPractice.Id, Profile.MemberId),
-                    PracticeId = _nextPractice.Id,
-                    MemberId = Profile.MemberId,
-                    MemberName = Profile.Name,
-                    Part = Profile.Part,
-                    Status = status,
-                    UpdatedAt = DateTime.UtcNow
-                });
-            }
-            else
-            {
-                mine.Status = status;
-                mine.MemberName = Profile.Name;
-                mine.Part = Profile.Part;
-                mine.UpdatedAt = DateTime.UtcNow;
-            }
-
+            // メンバー一覧・練習予定は変化しないためそのまま使い回し、出欠だけをサーバー側で絞り込み再取得する。
+            // こうすることで、自分の変更と同時に他メンバーが行った出欠変更も画面に反映される。
+            _attendances = await AttendanceService.GetForPracticeAsync(_nextPractice.Id);
             RecomputeSummaries();
         }
         catch (Exception ex)

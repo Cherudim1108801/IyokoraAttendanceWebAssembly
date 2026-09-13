@@ -85,18 +85,40 @@ public class DashboardTests : BunitContext
     }
 
     [Fact]
-    public void 出欠ボタンをタップしても出欠_メンバー_練習の再取得は発生しない()
+    public void 出欠ボタンをタップすると出欠一覧のみ再取得されメンバーや練習の再取得は発生しない()
     {
         var (client, _) = RegisterServices();
         client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3)));
         client.Seed("members", "me", Seed.Member("自分", PartType.Soprano));
 
         var cut = Render<Dashboard>();
-        var callsAfterLoad = client.Calls.Count;
+        var practiceCallsAfterLoad = client.Calls.Count(c => c.Collection == "practices");
+        var memberCallsAfterLoad = client.Calls.Count(c => c.Collection == "members");
+        var attendanceCallsAfterLoad = client.Calls.Count(c => c.Collection == "attendances");
 
         cut.Find("button.attend-yes").Click();
 
-        Assert.Equal(callsAfterLoad, client.Calls.Count);
+        Assert.Equal(practiceCallsAfterLoad, client.Calls.Count(c => c.Collection == "practices"));
+        Assert.Equal(memberCallsAfterLoad, client.Calls.Count(c => c.Collection == "members"));
+        Assert.Equal(attendanceCallsAfterLoad + 1, client.Calls.Count(c => c.Collection == "attendances"));
+    }
+
+    [Fact]
+    public void 出欠ボタンをタップすると他メンバーが直前に登録した出欠も集計に反映される()
+    {
+        var (client, _) = RegisterServices();
+        client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3)));
+        client.Seed("members", "me", Seed.Member("自分", PartType.Soprano));
+        client.Seed("members", "m2", Seed.Member("相方", PartType.Soprano));
+
+        var cut = Render<Dashboard>();
+
+        // 自分がボタンをタップするまでの間に、他のメンバーが別セッションで出欠を登録したことを模倣する。
+        client.Seed("attendances", Attendance.BuildId("p1", "m2"), Seed.Attendance("p1", "m2", "相方", PartType.Soprano, AttendanceStatus.Attending));
+
+        cut.Find("button.attend-yes").Click();
+
+        Assert.Contains("合計 参加予定: 2 人", cut.Markup);
     }
 
     [Fact]
