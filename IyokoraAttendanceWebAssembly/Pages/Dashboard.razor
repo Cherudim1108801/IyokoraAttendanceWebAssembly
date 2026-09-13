@@ -70,6 +70,10 @@
             {
                 <div class="iyk-modal-sub">🕒 @_nextPractice.TimeRangeSummary</div>
             }
+            @if (!string.IsNullOrEmpty(_nextPractice.PiecesSummary))
+            {
+                <div class="iyk-modal-sub">🎵 @_nextPractice.PiecesSummary</div>
+            }
             <hr class="divider" />
             <h3 class="section-title">タイムスケジュール</h3>
             @if (_nextPractice.TimelineItems.Count == 0)

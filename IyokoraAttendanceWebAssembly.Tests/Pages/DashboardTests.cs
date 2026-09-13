@@ -135,4 +135,21 @@ public class DashboardTests : BunitContext
         cut.Find("button.iyk-btn-block").Click();
         Assert.Empty(cut.FindAll("div.iyk-modal-backdrop"));
     }
+
+    [Fact]
+    public void モーダルの時刻の下に練習曲情報が表示される()
+    {
+        var (client, _) = RegisterServices();
+        var pieces = new List<PracticePieceRef>
+        {
+            new() { PieceId = "pc1", Title = "曲A" },
+            new() { PieceId = "pc2", Title = "曲B" }
+        };
+        client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3), startTime: "18:00", endTime: "20:00", pieces: pieces));
+
+        var cut = Render<Dashboard>();
+        cut.Find("div.highlight-card").Click();
+
+        Assert.Contains("🎵 曲A、曲B", cut.Find("div.iyk-modal-panel").TextContent);
+    }
 }
