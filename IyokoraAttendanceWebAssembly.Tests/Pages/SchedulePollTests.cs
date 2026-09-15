@@ -1,6 +1,7 @@
 using Bunit;
 using IyokoraAttendanceWebAssembly.Models;
 using IyokoraAttendanceWebAssembly.Pages;
+using IyokoraAttendanceWebAssembly.Repositories;
 using IyokoraAttendanceWebAssembly.Services;
 using IyokoraAttendanceWebAssembly.Tests.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
@@ -12,8 +13,8 @@ public class SchedulePollTests : BunitContext
     private FakeFirestoreClient RegisterServices(Role role = Role.GeneralMember)
     {
         var client = new FakeFirestoreClient();
-        Services.AddSingleton(new ScheduleCandidateService(client));
-        Services.AddSingleton(new ScheduleVoteService(client));
+        Services.AddSingleton(new ScheduleCandidateService(new ScheduleCandidateRepository(client)));
+        Services.AddSingleton(new ScheduleVoteService(new ScheduleVoteRepository(client)));
         var profile = new LocalProfileStore(FakeLocalStorage.Create());
         profile.MemberId = "me";
         profile.Name = "自分";

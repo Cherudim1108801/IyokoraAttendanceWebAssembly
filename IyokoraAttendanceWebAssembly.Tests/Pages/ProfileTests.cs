@@ -1,6 +1,7 @@
 using Bunit;
 using IyokoraAttendanceWebAssembly.Models;
 using IyokoraAttendanceWebAssembly.Pages;
+using IyokoraAttendanceWebAssembly.Repositories;
 using IyokoraAttendanceWebAssembly.Services;
 using IyokoraAttendanceWebAssembly.Tests.TestSupport;
 using Microsoft.AspNetCore.Components;
@@ -16,7 +17,7 @@ public class ProfileTests : BunitContext
     {
         var client = new FakeFirestoreClient();
         Services.AddSingleton(FakeMemberService.Create(client));
-        Services.AddSingleton(new PieceService(client));
+        Services.AddSingleton(new PieceService(new PieceRepository(client)));
         var profile = new LocalProfileStore(FakeLocalStorage.Create());
         profile.MemberId = "me";
         profile.Name = "現在の名前";

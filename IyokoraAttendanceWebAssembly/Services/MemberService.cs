@@ -1,23 +1,20 @@
 using IyokoraAttendanceWebAssembly.Models;
+using IyokoraAttendanceWebAssembly.Repositories;
 using Microsoft.Extensions.Logging;
 
 namespace IyokoraAttendanceWebAssembly.Services;
 
-/// <summary>Firestore の <c>members</c> コレクションに対するメンバー情報の取得・保存を担う。</summary>
-public class MemberService(IFirestoreClient client, NameCipher nameCipher, ILogger<MemberService> logger)
+/// <summary><c>members</c> に対するメンバー情報の取得・保存を担う。氏名の暗号化・復号とログインIDの一意性管理を担当する。</summary>
+public class MemberService(IMemberRepository repository, NameCipher nameCipher, ILogger<MemberService> logger)
 {
-    private const string Collection = "members";
-
     /// <summary>登録されている全メンバーを、パート → 氏名の順で取得する。</summary>
     /// <param name="ct">キャンセルトークン。</param>
     public async Task<List<Member>> GetAllAsync(CancellationToken ct = default)
     {
-        var docs = await client.ListDocumentsAsync(Collection, ct);
-        var filtered = docs.Where(d => d.GetString("groupId") == FirebaseOptions.GroupId).ToList();
-
-        var members = new List<Member>(filtered.Count);
-        foreach (var doc in filtered)
-            members.Add(await ToMemberAsync(doc));
+        var raw = await repository.GetAllAsync(ct);
+        var members = new List<Member>(raw.Count);
+        foreach (var member in raw)
+            members.Add(await DecryptNameAsync(member));
 
         return members
             .OrderBy(m => m.Part)
@@ -40,25 +37,8 @@ public class MemberService(IFirestoreClient client, NameCipher nameCipher, ILogg
     public async Task<string> SaveAsync(string memberId, string name, PartType part, Role role, IReadOnlyList<MemberPiecePart> pieceParts, string? existingLoginId, CancellationToken ct = default)
     {
         var loginId = string.IsNullOrEmpty(existingLoginId) ? await GenerateUniqueLoginIdAsync(ct) : existingLoginId;
-
-        var fields = new Dictionary<string, object?>
-        {
-            ["groupId"] = FirebaseOptions.GroupId,
-            ["name"] = await nameCipher.EncryptAsync(name),
-            ["part"] = part.ToString(),
-            ["role"] = role.ToString(),
-            ["loginId"] = loginId,
-            ["pieceParts"] = pieceParts
-                .Select(p => new Dictionary<string, object?>
-                {
-                    ["pieceId"] = p.PieceId,
-                    ["subPart"] = p.SubPart
-                })
-                .Cast<object?>()
-                .ToList(),
-            ["updatedAt"] = DateTime.UtcNow
-        };
-        await client.UpsertDocumentAsync(Collection, memberId, fields, ct);
+        var storedName = await nameCipher.EncryptAsync(name);
+        await repository.UpsertAsync(memberId, storedName, part, role, loginId, pieceParts, DateTime.UtcNow, ct);
         return loginId;
     }
 
@@ -71,15 +51,8 @@ public class MemberService(IFirestoreClient client, NameCipher nameCipher, ILogg
     public async Task<Member?> FindByLoginIdAsync(string loginId, CancellationToken ct = default)
     {
         var normalized = LoginIdGenerator.Normalize(loginId);
-        var filters = new Dictionary<string, object?>
-        {
-            ["groupId"] = FirebaseOptions.GroupId,
-            ["loginId"] = normalized
-        };
-        var docs = await client.QueryDocumentsAsync(Collection, filters, ct);
-        var doc = docs.FirstOrDefault();
-
-        return doc is null ? null : await ToMemberAsync(doc);
+        var raw = await repository.FindByLoginIdAsync(normalized, ct);
+        return raw is null ? null : await DecryptNameAsync(raw);
     }
 
     /// <summary>
@@ -93,20 +66,15 @@ public class MemberService(IFirestoreClient client, NameCipher nameCipher, ILogg
     public async Task<string> ReissueLoginIdAsync(string memberId, CancellationToken ct = default)
     {
         var newLoginId = await GenerateUniqueLoginIdAsync(ct);
-        await client.UpsertDocumentAsync(Collection, memberId, new Dictionary<string, object?>
-        {
-            ["loginId"] = newLoginId,
-            ["updatedAt"] = DateTime.UtcNow
-        }, ct);
+        await repository.UpdateLoginIdAsync(memberId, newLoginId, DateTime.UtcNow, ct);
         return newLoginId;
     }
 
     private async Task<string> GenerateUniqueLoginIdAsync(CancellationToken ct)
     {
-        var docs = await client.ListDocumentsAsync(Collection, ct);
-        var existingLoginIds = docs
-            .Where(d => d.GetString("groupId") == FirebaseOptions.GroupId)
-            .Select(d => d.GetString("loginId"))
+        var existing = await repository.GetAllAsync(ct);
+        var existingLoginIds = existing
+            .Select(m => m.LoginId)
             .Where(id => !string.IsNullOrEmpty(id))
             .ToHashSet(StringComparer.Ordinal);
 
@@ -115,25 +83,18 @@ public class MemberService(IFirestoreClient client, NameCipher nameCipher, ILogg
             existingLoginIds.Contains);
     }
 
-    private async Task<Member> ToMemberAsync(FirestoreDocument doc)
+    /// <summary>
+    /// メンバーの氏名（保存値）を復号する。旧 AES-CBC 形式で保存されていた場合は、画面の表示や読み込みを
+    /// ブロックせずバックグラウンドで AES-GCM に再暗号化して保存し直す。
+    /// </summary>
+    private async Task<Member> DecryptNameAsync(Member raw)
     {
-        var decryptedName = await nameCipher.DecryptOrPlainAsync(doc.GetString("name"));
-        if (decryptedName.WasLegacyFormat)
-            _ = ReencryptNameInBackgroundAsync(doc.Id, decryptedName.Value);
+        var decrypted = await nameCipher.DecryptOrPlainAsync(raw.Name);
+        if (decrypted.WasLegacyFormat)
+            _ = ReencryptNameInBackgroundAsync(raw.Id, decrypted.Value);
 
-        return new()
-        {
-            Id = doc.Id,
-            Name = decryptedName.Value,
-            LoginId = doc.GetString("loginId"),
-            Part = Enum.TryParse<PartType>(doc.GetString("part"), out var part) ? part : PartType.Soprano,
-            Role = Enum.TryParse<Role>(doc.GetString("role"), out var role) ? role : Role.GeneralMember,
-            PieceParts = doc.GetList("pieceParts")
-                .OfType<Dictionary<string, object?>>()
-                .Select(ToPiecePart)
-                .ToList(),
-            UpdatedAt = doc.GetDateTime("updatedAt")
-        };
+        raw.Name = decrypted.Value;
+        return raw;
     }
 
     /// <summary>
@@ -146,17 +107,11 @@ public class MemberService(IFirestoreClient client, NameCipher nameCipher, ILogg
         try
         {
             var reencrypted = await nameCipher.EncryptAsync(plainName);
-            await client.UpsertDocumentAsync(Collection, memberId, new Dictionary<string, object?> { ["name"] = reencrypted });
+            await repository.UpdateNameAsync(memberId, reencrypted);
         }
         catch (Exception ex)
         {
             logger.LogWarning(ex, "氏名の暗号化方式の移行(AES-CBC→AES-GCM)に失敗しました: memberId={MemberId}", memberId);
         }
     }
-
-    private static MemberPiecePart ToPiecePart(Dictionary<string, object?> fields) => new()
-    {
-        PieceId = fields.GetValueOrDefault("pieceId") as string ?? string.Empty,
-        SubPart = fields.GetValueOrDefault("subPart") as string ?? string.Empty
-    };
 }

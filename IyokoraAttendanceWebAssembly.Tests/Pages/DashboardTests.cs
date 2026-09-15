@@ -1,6 +1,7 @@
 using Bunit;
 using IyokoraAttendanceWebAssembly.Models;
 using IyokoraAttendanceWebAssembly.Pages;
+using IyokoraAttendanceWebAssembly.Repositories;
 using IyokoraAttendanceWebAssembly.Services;
 using IyokoraAttendanceWebAssembly.Tests.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
@@ -13,8 +14,8 @@ public class DashboardTests : BunitContext
     {
         var client = new FakeFirestoreClient();
         Services.AddSingleton(FakeMemberService.Create(client));
-        Services.AddSingleton(new PracticeService(client));
-        Services.AddSingleton(new AttendanceService(client));
+        Services.AddSingleton(new PracticeService(new PracticeRepository(client)));
+        Services.AddSingleton(new AttendanceService(new AttendanceRepository(client)));
         var profile = new LocalProfileStore(FakeLocalStorage.Create());
         profile.MemberId = "me";
         profile.Name = "自分";

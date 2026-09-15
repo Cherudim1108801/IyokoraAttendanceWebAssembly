@@ -1,3 +1,4 @@
+using IyokoraAttendanceWebAssembly.Repositories;
 using IyokoraAttendanceWebAssembly.Services;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.JSInterop;
@@ -21,6 +22,7 @@ internal static class FakeMemberService
             .Setup(js => js.InvokeAsync<NameDecryptResult>(It.IsAny<string>(), It.IsAny<object?[]>()))
             .Returns((string _, object?[] args) => ValueTask.FromResult(new NameDecryptResult((string)args[1]!, WasLegacyFormat: false)));
 
-        return new MemberService(client ?? new FakeFirestoreClient(), new NameCipher(jsRuntimeMock.Object), NullLogger<MemberService>.Instance);
+        var repository = new MemberRepository(client ?? new FakeFirestoreClient());
+        return new MemberService(repository, new NameCipher(jsRuntimeMock.Object), NullLogger<MemberService>.Instance);
     }
 }

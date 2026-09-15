@@ -1,22 +1,17 @@
 using IyokoraAttendanceWebAssembly.Models;
+using IyokoraAttendanceWebAssembly.Repositories;
 
 namespace IyokoraAttendanceWebAssembly.Services;
 
-/// <summary>Firestore の <c>pieces</c> コレクションに対する練習曲（レパートリー）の取得・作成・削除を担う。</summary>
-public class PieceService(IFirestoreClient client)
+/// <summary><c>pieces</c> に対する練習曲（レパートリー）の取得・作成・削除を担う。</summary>
+public class PieceService(IPieceRepository repository)
 {
-    private const string Collection = "pieces";
-
     /// <summary>登録されている曲を曲名順で取得する。</summary>
     /// <param name="includeArchived">取り組みが終わり非表示にされている曲も含めるかどうか。既定は含めない。</param>
     /// <param name="ct">キャンセルトークン。</param>
     public async Task<List<Piece>> GetAllAsync(bool includeArchived = false, CancellationToken ct = default)
     {
-        var docs = await client.ListDocumentsAsync(Collection, ct);
-        var pieces = docs
-            .Where(d => d.GetString("groupId") == FirebaseOptions.GroupId)
-            .Select(ToPiece);
-
+        var pieces = await repository.GetAllAsync(ct);
         return PieceVisibility.Filter(pieces, includeArchived)
             .OrderBy(p => p.Title, StringComparer.CurrentCultureIgnoreCase)
             .ToList();
@@ -26,11 +21,8 @@ public class PieceService(IFirestoreClient client)
     /// <param name="pieceId">曲ID。</param>
     /// <param name="isArchived">非表示にするかどうか。</param>
     /// <param name="ct">キャンセルトークン。</param>
-    public Task SetArchivedAsync(string pieceId, bool isArchived, CancellationToken ct = default)
-    {
-        var fields = new Dictionary<string, object?> { ["isArchived"] = isArchived };
-        return client.UpsertDocumentAsync(Collection, pieceId, fields, ct);
-    }
+    public Task SetArchivedAsync(string pieceId, bool isArchived, CancellationToken ct = default) =>
+        repository.SetArchivedAsync(pieceId, isArchived, ct);
 
     /// <summary>新しい曲を登録する。</summary>
     /// <param name="title">曲名。</param>
@@ -40,21 +32,7 @@ public class PieceService(IFirestoreClient client)
     public async Task<string> CreateAsync(string title, IReadOnlyList<PiecePartAssignment> partAssignments, CancellationToken ct = default)
     {
         var id = Guid.NewGuid().ToString("N");
-        var fields = new Dictionary<string, object?>
-        {
-            ["groupId"] = FirebaseOptions.GroupId,
-            ["title"] = title,
-            ["parts"] = partAssignments
-                .Select(a => new Dictionary<string, object?>
-                {
-                    ["part"] = a.Part.ToString(),
-                    ["division"] = a.Division.ToString()
-                })
-                .Cast<object?>()
-                .ToList(),
-            ["createdAt"] = DateTime.UtcNow
-        };
-        await client.UpsertDocumentAsync(Collection, id, fields, ct);
+        await repository.CreateAsync(id, title, partAssignments, DateTime.UtcNow, ct);
         return id;
     }
 
@@ -62,23 +40,5 @@ public class PieceService(IFirestoreClient client)
     /// <param name="pieceId">曲ID。</param>
     /// <param name="ct">キャンセルトークン。</param>
     public Task DeleteAsync(string pieceId, CancellationToken ct = default) =>
-        client.DeleteDocumentAsync(Collection, pieceId, ct);
-
-    private static Piece ToPiece(FirestoreDocument doc) => new()
-    {
-        Id = doc.Id,
-        Title = doc.GetString("title"),
-        PartAssignments = doc.GetList("parts")
-            .OfType<Dictionary<string, object?>>()
-            .Select(ToAssignment)
-            .ToList(),
-        CreatedAt = doc.GetDateTime("createdAt"),
-        IsArchived = doc.GetBool("isArchived")
-    };
-
-    private static PiecePartAssignment ToAssignment(Dictionary<string, object?> fields) => new()
-    {
-        Part = Enum.TryParse<PartType>(fields.GetValueOrDefault("part") as string, out var part) ? part : PartType.Soprano,
-        Division = Enum.TryParse<PartDivision>(fields.GetValueOrDefault("division") as string, out var division) ? division : PartDivision.None
-    };
+        repository.DeleteAsync(pieceId, ct);
 }
