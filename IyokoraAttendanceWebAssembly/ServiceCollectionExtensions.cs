@@ -1,3 +1,4 @@
+using IyokoraAttendanceWebAssembly.Repositories;
 using IyokoraAttendanceWebAssembly.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.JSInterop;
@@ -22,6 +23,14 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAppCheckTokenProvider, AppCheckTokenProvider>();
         services.AddScoped<NameCipher>();
         services.AddScoped<LocalProfileStore>();
+
+        services.AddScoped<IMemberRepository, MemberRepository>();
+        services.AddScoped<IPracticeRepository, PracticeRepository>();
+        services.AddScoped<IAttendanceRepository, AttendanceRepository>();
+        services.AddScoped<IPieceRepository, PieceRepository>();
+        services.AddScoped<IScheduleCandidateRepository, ScheduleCandidateRepository>();
+        services.AddScoped<IScheduleVoteRepository, ScheduleVoteRepository>();
+
         services.AddScoped<MemberService>();
         services.AddScoped<PracticeService>();
         services.AddScoped<AttendanceService>();

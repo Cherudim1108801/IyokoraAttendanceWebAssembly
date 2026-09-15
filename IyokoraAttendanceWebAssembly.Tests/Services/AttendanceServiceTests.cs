@@ -1,4 +1,5 @@
 using IyokoraAttendanceWebAssembly.Models;
+using IyokoraAttendanceWebAssembly.Repositories;
 using IyokoraAttendanceWebAssembly.Services;
 using Moq;
 
@@ -6,49 +7,23 @@ namespace IyokoraAttendanceWebAssembly.Tests.Services;
 
 public class AttendanceServiceTests
 {
-    private static FirestoreDocument CreateAttendanceDoc(string id, string practiceId, string memberId, AttendanceStatus status, string groupId = "default") => new()
+    private static (AttendanceService service, Mock<IAttendanceRepository> repository) CreateService()
     {
-        Id = id,
-        Fields = new Dictionary<string, object?>
-        {
-            ["groupId"] = groupId,
-            ["practiceId"] = practiceId,
-            ["memberId"] = memberId,
-            ["memberName"] = "テスト",
-            ["part"] = PartType.Soprano.ToString(),
-            ["status"] = status.ToString(),
-            ["updatedAt"] = DateTime.UtcNow
-        }
-    };
-
-    private static (AttendanceService service, Mock<IFirestoreClient> client) CreateService(IEnumerable<FirestoreDocument>? docs = null)
-    {
-        var list = (docs ?? []).ToList();
-        var clientMock = new Mock<IFirestoreClient>();
-        clientMock
-            .Setup(c => c.QueryDocumentsAsync("attendances", It.IsAny<IReadOnlyDictionary<string, object?>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((string _, IReadOnlyDictionary<string, object?> filters, CancellationToken _) =>
-                list.Where(d => filters.All(f => d.Fields.TryGetValue(f.Key, out var v) && Equals(v, f.Value))).ToList());
-        clientMock
-            .Setup(c => c.GetDocumentAsync("attendances", It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((string _, string id, CancellationToken _) => list.FirstOrDefault(d => d.Id == id));
-        clientMock
-            .Setup(c => c.UpsertDocumentAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Dictionary<string, object?>>(), It.IsAny<CancellationToken>()))
+        var repositoryMock = new Mock<IAttendanceRepository>();
+        repositoryMock
+            .Setup(r => r.SetStatusAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<PartType>(), It.IsAny<AttendanceStatus>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
-        return (new AttendanceService(clientMock.Object), clientMock);
+        return (new AttendanceService(repositoryMock.Object), repositoryMock);
     }
 
     [Fact]
-    public async Task 指定した練習の自団体分のみ出欠が取得される()
+    public async Task 出欠取得は練習IDでリポジトリに委譲される()
     {
-        var docs = new[]
-        {
-            CreateAttendanceDoc("a1", "practice1", "m1", AttendanceStatus.Attending),
-            CreateAttendanceDoc("a2", "practice2", "m2", AttendanceStatus.Attending),
-            CreateAttendanceDoc("a3", "practice1", "m3", AttendanceStatus.Attending, groupId: "other")
-        };
-        var (service, _) = CreateService(docs);
+        var (service, repository) = CreateService();
+        repository
+            .Setup(r => r.GetForPracticeAsync("practice1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new Attendance { Id = "a1", PracticeId = "practice1", MemberId = "m1", MemberName = "テスト", Part = PartType.Soprano, Status = AttendanceStatus.Attending }]);
 
         var attendances = await service.GetForPracticeAsync("practice1");
 
@@ -56,71 +31,15 @@ public class AttendanceServiceTests
     }
 
     [Fact]
-    public async Task 指定メンバーの出欠が見つからない場合はnullが返る()
+    public async Task 出欠を登録すると現在時刻とともにリポジトリへ渡される()
     {
-        var docs = new[] { CreateAttendanceDoc(Attendance.BuildId("practice1", "m1"), "practice1", "m1", AttendanceStatus.Attending) };
-        var (service, _) = CreateService(docs);
-
-        var mine = await service.GetForMemberAsync("practice1", "m2");
-
-        Assert.Null(mine);
-    }
-
-    [Fact]
-    public async Task 指定メンバーの出欠が見つかる場合はその内容が返る()
-    {
-        var docs = new[] { CreateAttendanceDoc(Attendance.BuildId("practice1", "m1"), "practice1", "m1", AttendanceStatus.NotAttending) };
-        var (service, _) = CreateService(docs);
-
-        var mine = await service.GetForMemberAsync("practice1", "m1");
-
-        Assert.NotNull(mine);
-        Assert.Equal(AttendanceStatus.NotAttending, mine!.Status);
-    }
-
-    [Fact]
-    public async Task 指定メンバーの出欠取得はコレクション全体を取得せず複合キーで直接1件取得する()
-    {
-        var docs = new[] { CreateAttendanceDoc(Attendance.BuildId("practice1", "m1"), "practice1", "m1", AttendanceStatus.Attending) };
-        var (service, client) = CreateService(docs);
-
-        await service.GetForMemberAsync("practice1", "m1");
-
-        client.Verify(c => c.GetDocumentAsync("attendances", Attendance.BuildId("practice1", "m1"), It.IsAny<CancellationToken>()), Times.Once);
-        client.Verify(c => c.ListDocumentsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
-        client.Verify(c => c.QueryDocumentsAsync(It.IsAny<string>(), It.IsAny<IReadOnlyDictionary<string, object?>>(), It.IsAny<CancellationToken>()), Times.Never);
-    }
-
-    [Fact]
-    public async Task 練習の出欠一覧取得はコレクション全体を取得せずgroupIdと練習IDで絞り込む()
-    {
-        var docs = new[] { CreateAttendanceDoc("a1", "practice1", "m1", AttendanceStatus.Attending) };
-        var (service, client) = CreateService(docs);
-
-        await service.GetForPracticeAsync("practice1");
-
-        client.Verify(c => c.QueryDocumentsAsync(
-            "attendances",
-            It.Is<IReadOnlyDictionary<string, object?>>(f => (string)f["groupId"]! == FirebaseOptions.GroupId && (string)f["practiceId"]! == "practice1"),
-            It.IsAny<CancellationToken>()), Times.Once);
-        client.Verify(c => c.ListDocumentsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
-    }
-
-    [Fact]
-    public async Task 出欠を登録すると練習IDとメンバーIDの複合キーで保存される()
-    {
-        var (service, client) = CreateService();
+        var (service, repository) = CreateService();
 
         await service.SetStatusAsync("practice1", "member1", "山田 太郎", PartType.Alto, AttendanceStatus.Attending);
 
-        client.Verify(c => c.UpsertDocumentAsync(
-            "attendances",
-            Attendance.BuildId("practice1", "member1"),
-            It.Is<Dictionary<string, object?>>(f =>
-                (string)f["memberId"]! == "member1" &&
-                (string)f["memberName"]! == "山田 太郎" &&
-                (string)f["part"]! == PartType.Alto.ToString() &&
-                (string)f["status"]! == AttendanceStatus.Attending.ToString()),
+        repository.Verify(r => r.SetStatusAsync(
+            "practice1", "member1", "山田 太郎", PartType.Alto, AttendanceStatus.Attending,
+            It.Is<DateTime>(d => d.Kind == DateTimeKind.Utc),
             It.IsAny<CancellationToken>()), Times.Once);
     }
 }

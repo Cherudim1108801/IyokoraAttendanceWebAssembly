@@ -1,6 +1,7 @@
 using Bunit;
 using IyokoraAttendanceWebAssembly.Models;
 using IyokoraAttendanceWebAssembly.Pages;
+using IyokoraAttendanceWebAssembly.Repositories;
 using IyokoraAttendanceWebAssembly.Services;
 using IyokoraAttendanceWebAssembly.Tests.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
@@ -12,7 +13,7 @@ public class RecordingsTests : BunitContext
     private FakeFirestoreClient RegisterServices()
     {
         var client = new FakeFirestoreClient();
-        Services.AddSingleton(new PracticeService(client));
+        Services.AddSingleton(new PracticeService(new PracticeRepository(client)));
         return client;
     }
 

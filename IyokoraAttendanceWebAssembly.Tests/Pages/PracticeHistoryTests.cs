@@ -1,6 +1,7 @@
 using Bunit;
 using IyokoraAttendanceWebAssembly.Models;
 using IyokoraAttendanceWebAssembly.Pages;
+using IyokoraAttendanceWebAssembly.Repositories;
 using IyokoraAttendanceWebAssembly.Services;
 using IyokoraAttendanceWebAssembly.Tests.TestSupport;
 using Microsoft.AspNetCore.Components;
@@ -13,7 +14,7 @@ public class PracticeHistoryTests : BunitContext
     private FakeFirestoreClient RegisterServices(Role role = Role.GeneralMember)
     {
         var client = new FakeFirestoreClient();
-        Services.AddSingleton(new PracticeService(client));
+        Services.AddSingleton(new PracticeService(new PracticeRepository(client)));
         var profile = new LocalProfileStore(FakeLocalStorage.Create());
         profile.Role = role;
         Services.AddSingleton(profile);

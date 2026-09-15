@@ -1,23 +1,20 @@
 using IyokoraAttendanceWebAssembly.Models;
-using IyokoraAttendanceWebAssembly.Repositories;
 
-namespace IyokoraAttendanceWebAssembly.Services;
+namespace IyokoraAttendanceWebAssembly.Repositories;
 
-/// <summary><c>attendances</c> に対する出欠情報の取得・更新を担う。</summary>
-public class AttendanceService(IAttendanceRepository repository)
+/// <summary>Firestore の <c>attendances</c> コレクションに対するデータアクセスの抽象。</summary>
+public interface IAttendanceRepository
 {
-    /// <summary>指定練習に対する全メンバーの出欠を取得する。</summary>
+    /// <summary>指定練習に対する自団体分の全メンバーの出欠を取得する。</summary>
     /// <param name="practiceId">練習予定ID。</param>
     /// <param name="ct">キャンセルトークン。</param>
-    public Task<List<Attendance>> GetForPracticeAsync(string practiceId, CancellationToken ct = default) =>
-        repository.GetForPracticeAsync(practiceId, ct);
+    Task<List<Attendance>> GetForPracticeAsync(string practiceId, CancellationToken ct = default);
 
     /// <summary>指定練習における、指定メンバー1人分の出欠を取得する。未回答の場合は null。</summary>
     /// <param name="practiceId">練習予定ID。</param>
     /// <param name="memberId">メンバーID。</param>
     /// <param name="ct">キャンセルトークン。</param>
-    public Task<Attendance?> GetForMemberAsync(string practiceId, string memberId, CancellationToken ct = default) =>
-        repository.GetForMemberAsync(practiceId, memberId, ct);
+    Task<Attendance?> GetForMemberAsync(string practiceId, string memberId, CancellationToken ct = default);
 
     /// <summary>指定練習・指定メンバーの出欠状態を登録または更新する。</summary>
     /// <param name="practiceId">練習予定ID。</param>
@@ -25,7 +22,7 @@ public class AttendanceService(IAttendanceRepository repository)
     /// <param name="memberName">メンバー名（非正規化して保存）。</param>
     /// <param name="part">所属パート（非正規化して保存）。</param>
     /// <param name="status">出欠状態。</param>
+    /// <param name="updatedAt">更新日時（UTC）。</param>
     /// <param name="ct">キャンセルトークン。</param>
-    public Task SetStatusAsync(string practiceId, string memberId, string memberName, PartType part, AttendanceStatus status, CancellationToken ct = default) =>
-        repository.SetStatusAsync(practiceId, memberId, memberName, part, status, DateTime.UtcNow, ct);
+    Task SetStatusAsync(string practiceId, string memberId, string memberName, PartType part, AttendanceStatus status, DateTime updatedAt, CancellationToken ct = default);
 }
