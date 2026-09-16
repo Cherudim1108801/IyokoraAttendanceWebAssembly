@@ -162,4 +162,60 @@ public class ProfileTests : BunitContext
         Assert.DoesNotContain("onboarding", nav.Uri);
         Assert.Equal("現在の名前", profile.Name);
     }
+
+    [Fact]
+    public void 読み込みに失敗した場合はエラーメッセージが表示される()
+    {
+        var (client, _) = RegisterServices();
+        client.FailNextCall("List", "pieces");
+
+        var cut = Render<Profile>();
+
+        Assert.Contains("読み込みに失敗しました", cut.Find("p.error-text").TextContent);
+    }
+
+    [Fact]
+    public void 保存に失敗した場合はエラーメッセージが表示される()
+    {
+        var (client, _) = RegisterServices();
+        client.FailNextCall("Upsert", "members");
+
+        var cut = Render<Profile>();
+        cut.Find("input[type=text]").Input("新しい名前");
+        cut.Find("button.iyk-btn-primary").Click();
+
+        Assert.Contains("保存に失敗しました", cut.Find("p.error-text").TextContent);
+        Assert.Empty(cut.FindAll("p.success-text"));
+    }
+
+    [Fact]
+    public void ログインIDの更新に失敗した場合はエラーメッセージが表示される()
+    {
+        var (client, profile) = RegisterServices(confirmSwitch: true);
+        client.FailNextCall("Upsert", "members");
+
+        var cut = Render<Profile>();
+        cut.Find("button.iyk-btn:not(.iyk-btn-primary):not(.iyk-btn-outline-danger)").Click();
+
+        Assert.Contains("ログインIDの更新に失敗しました", cut.Find("p.error-text").TextContent);
+        Assert.Equal("IK1234", profile.LoginId);
+    }
+
+    [Fact]
+    public void パートごとの担当を選択して保存すると端末に保存される()
+    {
+        var (client, profile) = RegisterServices();
+        client.Seed("pieces", "p1", Seed.Piece("分割曲", partAssignments:
+        [
+            new() { Part = PartType.Soprano, Division = PartDivision.UpperLower }
+        ]));
+
+        var cut = Render<Profile>();
+        cut.Find("select[style*='width:140px']").Change("ソプラノ上");
+        cut.Find("button.iyk-btn-primary").Click();
+
+        Assert.Contains("保存しました", cut.Find("p.success-text").TextContent);
+        Assert.Single(profile.PieceParts);
+        Assert.Equal("ソプラノ上", profile.PieceParts[0].SubPart);
+    }
 }

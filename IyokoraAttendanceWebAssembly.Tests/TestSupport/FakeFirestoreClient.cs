@@ -10,13 +10,37 @@ namespace IyokoraAttendanceWebAssembly.Tests.TestSupport;
 internal class FakeFirestoreClient : IFirestoreClient
 {
     private readonly Dictionary<string, Dictionary<string, Dictionary<string, object?>>> _collections = [];
+    private (string Method, string Collection)? _failTrigger;
+    private Exception? _failException;
 
     /// <summary>各メソッドの呼び出し履歴（メソッド種別, コレクション名）。テストで通信回数(全件取得の有無等)を検証するために使用する。</summary>
     public List<(string Method, string Collection)> Calls { get; } = [];
 
+    /// <summary>
+    /// 指定したメソッド・コレクションへの次の呼び出しで例外を送出するよう設定する（一度だけ発火）。
+    /// Pages 側の catch(Exception) でエラーメッセージを表示する分岐をテストするために使用する。
+    /// </summary>
+    public void FailNextCall(string method, string collection, Exception? exception = null)
+    {
+        _failTrigger = (method, collection);
+        _failException = exception ?? new InvalidOperationException("テスト用の疑似エラー");
+    }
+
+    private void ThrowIfConfigured(string method, string collection)
+    {
+        if (_failTrigger is not { } trigger || trigger.Method != method || trigger.Collection != collection)
+            return;
+
+        _failTrigger = null;
+        var ex = _failException!;
+        _failException = null;
+        throw ex;
+    }
+
     public Task<List<FirestoreDocument>> ListDocumentsAsync(string collection, CancellationToken ct = default)
     {
         Calls.Add(("List", collection));
+        ThrowIfConfigured("List", collection);
         return Task.FromResult(GetCollection(collection)
             .Select(kv => new FirestoreDocument { Id = kv.Key, Fields = new Dictionary<string, object?>(kv.Value) })
             .ToList());
@@ -25,6 +49,7 @@ internal class FakeFirestoreClient : IFirestoreClient
     public Task<FirestoreDocument?> GetDocumentAsync(string collection, string documentId, CancellationToken ct = default)
     {
         Calls.Add(("Get", collection));
+        ThrowIfConfigured("Get", collection);
         var found = GetCollection(collection).TryGetValue(documentId, out var fields)
             ? new FirestoreDocument { Id = documentId, Fields = new Dictionary<string, object?>(fields) }
             : null;
@@ -34,6 +59,7 @@ internal class FakeFirestoreClient : IFirestoreClient
     public Task<List<FirestoreDocument>> QueryDocumentsAsync(string collection, IReadOnlyDictionary<string, object?> equalsFilters, CancellationToken ct = default)
     {
         Calls.Add(("Query", collection));
+        ThrowIfConfigured("Query", collection);
         var matches = GetCollection(collection)
             .Where(kv => equalsFilters.All(f => kv.Value.TryGetValue(f.Key, out var v) && Equals(v, f.Value)))
             .Select(kv => new FirestoreDocument { Id = kv.Key, Fields = new Dictionary<string, object?>(kv.Value) })
@@ -43,6 +69,7 @@ internal class FakeFirestoreClient : IFirestoreClient
 
     public Task UpsertDocumentAsync(string collection, string documentId, Dictionary<string, object?> fields, CancellationToken ct = default)
     {
+        ThrowIfConfigured("Upsert", collection);
         var col = GetCollection(collection);
         if (!col.TryGetValue(documentId, out var existing))
         {
@@ -58,6 +85,7 @@ internal class FakeFirestoreClient : IFirestoreClient
 
     public Task DeleteDocumentAsync(string collection, string documentId, CancellationToken ct = default)
     {
+        ThrowIfConfigured("Delete", collection);
         GetCollection(collection).Remove(documentId);
         return Task.CompletedTask;
     }

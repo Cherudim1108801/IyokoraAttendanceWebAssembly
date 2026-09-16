@@ -9,9 +9,9 @@ namespace IyokoraAttendanceWebAssembly.Tests.Pages;
 
 public class OnboardingTests : BunitContext
 {
-    private LocalProfileStore RegisterServices()
+    private LocalProfileStore RegisterServices(FakeFirestoreClient? client = null)
     {
-        Services.AddSingleton(FakeMemberService.Create());
+        Services.AddSingleton(FakeMemberService.Create(client));
         var profile = new LocalProfileStore(FakeLocalStorage.Create());
         Services.AddSingleton(profile);
         return profile;
@@ -55,5 +55,35 @@ public class OnboardingTests : BunitContext
         cut.Find("button.iyk-btn-primary").Click();
 
         Assert.Contains("名前を入力してください", cut.Find("p.error-text").TextContent);
+    }
+
+    [Fact]
+    public void 保存に失敗した場合はエラーメッセージが表示される()
+    {
+        var client = new FakeFirestoreClient();
+        client.FailNextCall("Upsert", "members");
+        RegisterServices(client);
+        var cut = Render<Onboarding>();
+
+        cut.Find("input").Input("山田 太郎");
+        cut.Find("button.iyk-btn-primary").Click();
+
+        Assert.Contains("保存に失敗しました", cut.Find("p.error-text").TextContent);
+    }
+
+    [Fact]
+    public void 登録済みの端末では既存の名前とパートが初期表示される()
+    {
+        var profile = RegisterServices();
+        profile.MemberId = "me";
+        profile.Name = "既存 太郎";
+        profile.Part = PartType.Alto;
+
+        var cut = Render<Onboarding>();
+
+        Assert.Equal("既存 太郎", cut.Find("input").GetAttribute("value"));
+        cut.Find("input").Input("既存 太郎"); // 空白トリム後でも既存の名前のまま登録できることの確認
+        cut.Find("button.iyk-btn-primary").Click();
+        Assert.Equal(PartType.Alto, profile.Part);
     }
 }

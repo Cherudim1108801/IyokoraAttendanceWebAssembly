@@ -289,6 +289,24 @@ public class PracticeDetailTests : BunitContext
     }
 
     [Fact]
+    public void 注目中の曲を注目解除すると表示が切り替わる()
+    {
+        var (client, _, _) = RegisterServices(Role.Admin);
+        client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3), pieces:
+        [
+            new() { PieceId = "pc1", Title = "曲A", RecordingUrl = "https://example.com/rec", IsFeatured = true }
+        ]));
+
+        var cut = Render();
+        Assert.Contains("★ 注目解除", cut.Markup);
+
+        cut.FindAll("button.iyk-btn-text-star")[0].Click();
+
+        Assert.Contains("★ 注目に設定", cut.Markup);
+        Assert.DoesNotContain("★ 注目解除", cut.Markup);
+    }
+
+    [Fact]
     public void 注目設定を切り替えても各コレクションの再取得は発生しない()
     {
         var (client, _, _) = RegisterServices(Role.Admin);
@@ -369,5 +387,200 @@ public class PracticeDetailTests : BunitContext
         cut.Find("button.iyk-btn-outline-danger").Click();
 
         Assert.True(client.Contains("practices", "p1"));
+    }
+
+    [Fact]
+    public void 読み込みに失敗した場合はエラーメッセージが表示される()
+    {
+        var (client, _, _) = RegisterServices();
+        client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3)));
+        client.FailNextCall("Get", "practices");
+
+        var cut = Render();
+
+        Assert.Contains("読み込みに失敗しました", cut.Find("p.error-text").TextContent);
+    }
+
+    [Fact]
+    public void 出欠更新に失敗した場合はエラーメッセージが表示される()
+    {
+        var (client, _, _) = RegisterServices();
+        client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3)));
+        client.Seed("members", "me", Seed.Member("自分"));
+        client.FailNextCall("Upsert", "attendances");
+
+        var cut = Render();
+        cut.Find("button.attend-yes").Click();
+
+        Assert.Contains("更新に失敗しました", cut.Find("p.error-text").TextContent);
+    }
+
+    [Fact]
+    public void タイムスケジュールの保存に失敗した場合はエラーメッセージが表示される()
+    {
+        var (client, _, _) = RegisterServices(Role.Admin);
+        client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3)));
+        client.FailNextCall("Upsert", "practices");
+
+        var cut = Render();
+        cut.Find("button.iyk-btn-text").Click();
+        cut.FindAll("input[type=time]")[0].Input("10:00:00");
+        cut.FindAll("input[type=time]")[1].Input("12:00:00");
+        cut.Find("button.iyk-btn-primary").Click();
+
+        Assert.Contains("タイムスケジュールの保存に失敗しました", cut.Find("p.error-text").TextContent);
+    }
+
+    [Fact]
+    public void 演奏予定曲の保存に失敗した場合はエラーメッセージが表示される()
+    {
+        var (client, _, _) = RegisterServices(Role.Admin);
+        client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3)));
+        client.Seed("pieces", "pc1", Seed.Piece("編集後の曲"));
+        client.FailNextCall("Upsert", "practices");
+
+        var cut = Render();
+        var editButtons = cut.FindAll("button.iyk-btn-text");
+        editButtons[1].Click();
+        cut.Find("input[type=checkbox]").Change(true);
+        cut.Find("button.iyk-btn-primary").Click();
+
+        Assert.Contains("演奏予定曲の保存に失敗しました", cut.Find("p.error-text").TextContent);
+    }
+
+    [Fact]
+    public void 録音リンクの保存に失敗した場合はエラーメッセージが表示される()
+    {
+        var (client, _, js) = RegisterServices(Role.Admin);
+        client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3), pieces:
+        [
+            new() { PieceId = "pc1", Title = "曲A" }
+        ]));
+        js.Setup(j => j.InvokeAsync<string?>("prompt", It.IsAny<object?[]>())).ReturnsAsync("https://example.com/rec");
+        client.FailNextCall("Upsert", "practices");
+
+        var cut = Render();
+        cut.FindAll("button.iyk-btn-text")[2].Click();
+
+        Assert.Contains("録音リンクの保存に失敗しました", cut.Find("p.error-text").TextContent);
+    }
+
+    [Fact]
+    public void 注目設定の更新に失敗した場合はエラーメッセージが表示される()
+    {
+        var (client, _, _) = RegisterServices(Role.Admin);
+        client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3), pieces:
+        [
+            new() { PieceId = "pc1", Title = "曲A", RecordingUrl = "https://example.com/rec", IsFeatured = false }
+        ]));
+        client.FailNextCall("Upsert", "practices");
+
+        var cut = Render();
+        cut.FindAll("button.iyk-btn-text")[2].Click();
+
+        Assert.Contains("更新に失敗しました", cut.Find("p.error-text").TextContent);
+    }
+
+    [Fact]
+    public void 鍵の受け取り状況の更新に失敗した場合はエラーメッセージが表示される()
+    {
+        var (client, _, _) = RegisterServices(Role.Admin);
+        client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3), requiresKeyPickup: true));
+        client.FailNextCall("Upsert", "practices");
+
+        var cut = Render();
+        cut.Find("button.iyk-btn-text-primary").Click();
+
+        Assert.Contains("更新に失敗しました", cut.Find("p.error-text").TextContent);
+    }
+
+    [Fact]
+    public void 削除に失敗した場合はエラーメッセージが表示される()
+    {
+        var (client, _, js) = RegisterServices(Role.Admin);
+        client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3)));
+        js.Setup(j => j.InvokeAsync<bool>("confirm", It.IsAny<object?[]>())).ReturnsAsync(true);
+        client.FailNextCall("Delete", "practices");
+
+        var cut = Render();
+        cut.Find("button.iyk-btn-outline-danger").Click();
+
+        Assert.Contains("削除に失敗しました", cut.Find("p.error-text").TextContent);
+        Assert.True(client.Contains("practices", "p1"));
+    }
+
+    [Fact]
+    public void 登録済みのタイムスケジュールは開始時刻順で一覧表示される()
+    {
+        var (client, _, _) = RegisterServices();
+        client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3), timeline:
+        [
+            new PracticeTimelineItem { StartTime = "19:00", EndTime = "19:30", Content = "自由合奏" },
+            new PracticeTimelineItem { StartTime = "18:00", EndTime = "19:00", Content = "基礎合奏" }
+        ]));
+
+        var cut = Render();
+
+        var titles = cut.FindAll("p.list-card-title").Select(e => e.TextContent).ToList();
+        Assert.Equal(["18:00 〜 19:00", "19:00 〜 19:30"], titles);
+        Assert.Contains("基礎合奏", cut.Markup);
+    }
+
+    [Fact]
+    public void タイムスケジュール編集で項目を追加すると入力欄が増え削除ボタンで減らせる()
+    {
+        var (client, _, _) = RegisterServices(Role.Admin);
+        client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3)));
+
+        var cut = Render();
+        cut.Find("button.iyk-btn-text").Click();
+        cut.Find("button.iyk-btn-block").Click();
+        cut.Find("button.iyk-btn-block").Click();
+
+        Assert.Equal(2, cut.FindAll("input[type=text][placeholder='例：基礎合奏']").Count);
+
+        cut.FindAll("button.iyk-btn-text-danger")[0].Click();
+
+        Assert.Single(cut.FindAll("input[type=text][placeholder='例：基礎合奏']"));
+    }
+
+    [Fact]
+    public void 演奏予定曲編集パネルを開くと登録済みの曲にチェックが入っている()
+    {
+        var (client, _, _) = RegisterServices(Role.Admin);
+        client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3), pieces:
+        [
+            new() { PieceId = "pc1", Title = "曲A" }
+        ]));
+        client.Seed("pieces", "pc1", Seed.Piece("曲A"));
+
+        var cut = Render();
+        cut.FindAll("button.iyk-btn-text")[1].Click();
+
+        Assert.True(cut.Find("input[type=checkbox]").HasAttribute("checked"));
+    }
+
+    [Fact]
+    public void 分割方式のある曲では参加者に上下ラベルが表示される()
+    {
+        var (client, _, _) = RegisterServices();
+        client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3), pieces:
+        [
+            new() { PieceId = "pc1", Title = "曲A" }
+        ]));
+        client.Seed("pieces", "pc1", Seed.Piece("曲A", partAssignments:
+        [
+            new PiecePartAssignment { Part = PartType.Soprano, Division = PartDivision.UpperLower }
+        ]));
+        client.Seed("members", "me", Seed.Member("自分", PartType.Soprano, pieceParts:
+        [
+            new MemberPiecePart { PieceId = "pc1", SubPart = "ソプラノ上" }
+        ]));
+        client.Seed("attendances", "p1_me", Seed.Attendance("p1", "me", "自分", PartType.Soprano, AttendanceStatus.Attending));
+
+        var cut = Render();
+
+        var dotTexts = cut.FindAll("div.dot").Select(e => e.TextContent).ToList();
+        Assert.Contains("上", dotTexts);
     }
 }

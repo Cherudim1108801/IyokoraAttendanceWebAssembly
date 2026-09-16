@@ -110,4 +110,100 @@ public class ScheduleTests : BunitContext
         Assert.Empty(cut.FindAll("div.list-card"));
         Assert.False(client.Contains("practices", "p1"));
     }
+
+    [Fact]
+    public void タイトルや時間_場所_曲目が設定された予定は一覧カードに全て表示される()
+    {
+        var client = RegisterServices();
+        client.Seed("practices", "p1", Seed.Practice(
+            DateTime.Today.AddDays(3),
+            title: "定期練習",
+            place: "市民会館",
+            startTime: "10:00",
+            endTime: "12:00",
+            pieces: [new PracticePieceRef { PieceId = "piece1", Title = "曲A" }]));
+
+        var cut = Render<Schedule>();
+
+        Assert.Contains("定期練習", cut.Markup);
+        Assert.Contains("10:00〜12:00", cut.Markup);
+        Assert.Contains("市民会館", cut.Markup);
+        Assert.Contains("曲A", cut.Markup);
+    }
+
+    [Fact]
+    public void 読み込みに失敗した場合はエラーメッセージが表示される()
+    {
+        var client = RegisterServices();
+        client.FailNextCall("List", "practices");
+
+        var cut = Render<Schedule>();
+
+        Assert.Contains("読み込みに失敗しました", cut.Find("p.error-text").TextContent);
+        Assert.Empty(cut.FindAll("div.list-card"));
+    }
+
+    [Fact]
+    public void 曲が登録されている場合はチェックボックスが表示され選択した曲のみ登録される()
+    {
+        var client = RegisterServices(Role.Admin);
+        client.Seed("pieces", "piece1", Seed.Piece("曲A"));
+        client.Seed("pieces", "piece2", Seed.Piece("曲B"));
+
+        var cut = Render<Schedule>();
+        cut.Find("button.iyk-btn-primary").Click();
+
+        var checkboxes = cut.FindAll("input[type=checkbox][id^=piece_]");
+        Assert.Equal(2, checkboxes.Count);
+        checkboxes[0].Change(true);
+
+        cut.Find("div.highlight-card button.iyk-btn-primary").Click();
+
+        Assert.Contains("曲A", cut.Markup);
+        Assert.DoesNotContain("曲B", cut.Find("div.list-card").TextContent);
+    }
+
+    [Fact]
+    public void タイムスケジュール項目を追加すると入力欄が増え削除ボタンで減らせる()
+    {
+        RegisterServices(Role.Admin);
+        var cut = Render<Schedule>();
+        cut.Find("button.iyk-btn-primary").Click();
+
+        cut.Find("div.highlight-card button.iyk-btn-block:not(.iyk-btn-primary)").Click();
+        cut.Find("div.highlight-card button.iyk-btn-block:not(.iyk-btn-primary)").Click();
+        Assert.Equal(2, cut.FindAll("input[type=text][placeholder='例：基礎合奏']").Count);
+
+        cut.FindAll("div.highlight-card button.iyk-btn-text-danger")[0].Click();
+        Assert.Single(cut.FindAll("input[type=text][placeholder='例：基礎合奏']"));
+    }
+
+    [Fact]
+    public void 予定の追加に失敗した場合はエラーメッセージが表示される()
+    {
+        var client = RegisterServices(Role.Admin);
+        client.FailNextCall("Upsert", "practices");
+
+        var cut = Render<Schedule>();
+        cut.Find("button.iyk-btn-primary").Click();
+        cut.Find("div.highlight-card button.iyk-btn-primary").Click();
+
+        Assert.Contains("予定の追加に失敗しました", cut.Find("p.error-text").TextContent);
+        Assert.Empty(cut.FindAll("div.list-card"));
+    }
+
+    [Fact]
+    public void 削除に失敗した場合はエラーメッセージが表示され一覧に残る()
+    {
+        var client = RegisterServices(Role.Admin);
+        client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3)));
+        client.FailNextCall("Delete", "practices");
+
+        var cut = Render<Schedule>();
+        cut.Find("button.iyk-btn-text-danger").Click();
+
+        Assert.Contains("削除に失敗しました", cut.Find("p.error-text").TextContent);
+        Assert.Single(cut.FindAll("div.list-card"));
+        Assert.True(client.Contains("practices", "p1"));
+    }
 }
