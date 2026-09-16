@@ -79,4 +79,15 @@ public class RecordingsTests : BunitContext
         var titles = cut.FindAll("p.list-card-title").Select(e => e.TextContent).ToList();
         Assert.Equal(["新しい曲", "古い曲"], titles);
     }
+
+    [Fact]
+    public void 読み込みに失敗した場合はエラーメッセージが表示される()
+    {
+        var client = RegisterServices();
+        client.FailNextCall("List", "practices");
+
+        var cut = Render<Recordings>();
+
+        Assert.Contains("読み込みに失敗しました", cut.Find("p.error-text").TextContent);
+    }
 }

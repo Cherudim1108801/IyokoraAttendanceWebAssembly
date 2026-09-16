@@ -23,7 +23,7 @@ internal static class Seed
         ["updatedAt"] = DateTime.UtcNow
     };
 
-    public static Dictionary<string, object?> Practice(DateTime date, string title = "", string place = "", string startTime = "", string endTime = "", IEnumerable<PracticePieceRef>? pieces = null, bool requiresKeyPickup = false, bool keyPickedUp = false, string? keyPickedUpByName = null, string groupId = FirebaseOptions.GroupId) => new()
+    public static Dictionary<string, object?> Practice(DateTime date, string title = "", string place = "", string startTime = "", string endTime = "", IEnumerable<PracticePieceRef>? pieces = null, bool requiresKeyPickup = false, bool keyPickedUp = false, string? keyPickedUpByName = null, IEnumerable<PracticeTimelineItem>? timeline = null, string groupId = FirebaseOptions.GroupId) => new()
     {
         ["groupId"] = groupId,
         ["date"] = DateTime.SpecifyKind(date.Date, DateTimeKind.Utc),
@@ -31,7 +31,15 @@ internal static class Seed
         ["place"] = place,
         ["startTime"] = startTime,
         ["endTime"] = endTime,
-        ["timeline"] = new List<object?>(),
+        ["timeline"] = (timeline ?? [])
+            .Select(t => new Dictionary<string, object?>
+            {
+                ["startTime"] = t.StartTime,
+                ["endTime"] = t.EndTime,
+                ["content"] = t.Content
+            })
+            .Cast<object?>()
+            .ToList(),
         ["pieces"] = (pieces ?? [])
             .Select(p => new Dictionary<string, object?>
             {

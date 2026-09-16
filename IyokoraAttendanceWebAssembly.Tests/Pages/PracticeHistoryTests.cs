@@ -84,4 +84,46 @@ public class PracticeHistoryTests : BunitContext
         var nav = Services.GetRequiredService<NavigationManager>();
         Assert.EndsWith("practice/p1", nav.Uri);
     }
+
+    [Fact]
+    public void 場所や曲目が設定された練習は一覧カードに表示される()
+    {
+        var client = RegisterServices();
+        client.Seed("practices", "p1", Seed.Practice(
+            DateTime.Today.AddDays(-1),
+            place: "市民会館",
+            pieces: [new PracticePieceRef { PieceId = "piece1", Title = "曲A" }]));
+
+        var cut = Render<PracticeHistory>();
+
+        Assert.Contains("市民会館", cut.Markup);
+        Assert.Contains("曲A", cut.Markup);
+    }
+
+    [Fact]
+    public void 読み込みに失敗した場合はエラーメッセージが表示される()
+    {
+        var client = RegisterServices();
+        client.FailNextCall("List", "practices");
+
+        var cut = Render<PracticeHistory>();
+
+        Assert.Contains("読み込みに失敗しました", cut.Find("p.error-text").TextContent);
+        Assert.Empty(cut.FindAll("div.list-card"));
+    }
+
+    [Fact]
+    public void 削除に失敗した場合はエラーメッセージが表示され一覧に残る()
+    {
+        var client = RegisterServices(Role.Admin);
+        client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(-1)));
+        client.FailNextCall("Delete", "practices");
+
+        var cut = Render<PracticeHistory>();
+        cut.Find("button.iyk-btn-text-danger").Click();
+
+        Assert.Contains("削除に失敗しました", cut.Find("p.error-text").TextContent);
+        Assert.Single(cut.FindAll("div.list-card"));
+        Assert.True(client.Contains("practices", "p1"));
+    }
 }

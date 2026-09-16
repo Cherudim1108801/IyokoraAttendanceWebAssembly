@@ -153,4 +153,58 @@ public class DashboardTests : BunitContext
 
         Assert.Contains("🎵 曲A、曲B", cut.Find("div.iyk-modal-panel").TextContent);
     }
+
+    [Fact]
+    public void 場所が設定されている場合はハイライトカードに表示される()
+    {
+        var (client, _) = RegisterServices();
+        client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3), place: "市民会館"));
+
+        var cut = Render<Dashboard>();
+
+        Assert.Contains("市民会館", cut.Find("div.highlight-card").TextContent);
+    }
+
+    [Fact]
+    public void タイムスケジュールが登録されている場合はモーダルに開始時刻順で一覧表示される()
+    {
+        var (client, _) = RegisterServices();
+        client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3), timeline:
+        [
+            new PracticeTimelineItem { StartTime = "19:00", EndTime = "19:30", Content = "自由合奏" },
+            new PracticeTimelineItem { StartTime = "18:00", EndTime = "19:00", Content = "基礎合奏" }
+        ]));
+
+        var cut = Render<Dashboard>();
+        cut.Find("div.highlight-card").Click();
+
+        var titles = cut.Find("div.iyk-modal-panel").QuerySelectorAll("p.list-card-title").Select(e => e.TextContent).ToList();
+        Assert.Equal(["18:00 〜 19:00", "19:00 〜 19:30"], titles);
+        Assert.Contains("基礎合奏", cut.Find("div.iyk-modal-panel").TextContent);
+    }
+
+    [Fact]
+    public void 読み込みに失敗した場合はエラーメッセージが表示される()
+    {
+        var (client, _) = RegisterServices();
+        client.FailNextCall("List", "practices");
+
+        var cut = Render<Dashboard>();
+
+        Assert.Contains("読み込みに失敗しました", cut.Find("p.error-text").TextContent);
+    }
+
+    [Fact]
+    public void 出欠更新に失敗した場合はエラーメッセージが表示される()
+    {
+        var (client, _) = RegisterServices();
+        client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3)));
+        client.Seed("members", "me", Seed.Member("自分", PartType.Soprano));
+        client.FailNextCall("Upsert", "attendances");
+
+        var cut = Render<Dashboard>();
+        cut.Find("button.attend-yes").Click();
+
+        Assert.Contains("更新に失敗しました", cut.Find("p.error-text").TextContent);
+    }
 }

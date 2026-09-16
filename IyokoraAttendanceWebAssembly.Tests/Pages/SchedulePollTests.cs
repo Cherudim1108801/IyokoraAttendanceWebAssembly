@@ -85,4 +85,72 @@ public class SchedulePollTests : BunitContext
         Assert.Empty(cut.FindAll("div.list-card"));
         Assert.False(client.Contains("scheduleCandidates", "c1"));
     }
+
+    [Fact]
+    public void 読み込みに失敗した場合はエラーメッセージが表示される()
+    {
+        var client = RegisterServices();
+        client.FailNextCall("List", "scheduleCandidates");
+
+        var cut = Render<SchedulePoll>();
+
+        Assert.Contains("読み込みに失敗しました", cut.Find("p.error-text").TextContent);
+        Assert.Empty(cut.FindAll("div.list-card"));
+    }
+
+    [Fact]
+    public void 候補日の追加に失敗した場合はエラーメッセージが表示される()
+    {
+        var client = RegisterServices(Role.Admin);
+        client.FailNextCall("Upsert", "scheduleCandidates");
+
+        var cut = Render<SchedulePoll>();
+        cut.Find("button.iyk-btn-primary").Click();
+        cut.Find("div.highlight-card button.iyk-btn-primary").Click();
+
+        Assert.Contains("候補日の追加に失敗しました", cut.Find("p.error-text").TextContent);
+        Assert.Empty(cut.FindAll("div.list-card"));
+    }
+
+    [Fact]
+    public void 削除に失敗した場合はエラーメッセージが表示され一覧に残る()
+    {
+        var client = RegisterServices(Role.Admin);
+        client.Seed("scheduleCandidates", "c1", Seed.ScheduleCandidate(DateTime.Today.AddDays(3), TimeOfDay.Morning));
+        client.FailNextCall("Delete", "scheduleCandidates");
+
+        var cut = Render<SchedulePoll>();
+        cut.Find("button.iyk-btn-text-danger").Click();
+
+        Assert.Contains("削除に失敗しました", cut.Find("p.error-text").TextContent);
+        Assert.Single(cut.FindAll("div.list-card"));
+        Assert.True(client.Contains("scheduleCandidates", "c1"));
+    }
+
+    [Fact]
+    public void 時間帯を選択して候補日を追加すると選択した時間帯で登録される()
+    {
+        RegisterServices(Role.Admin);
+        var cut = Render<SchedulePoll>();
+
+        cut.Find("button.iyk-btn-primary").Click();
+        cut.FindAll("input[type=radio]")[1].Change(true);
+        cut.Find("div.highlight-card button.iyk-btn-primary").Click();
+
+        Assert.Contains("午後", cut.Markup);
+        Assert.DoesNotContain("午前", cut.Markup);
+    }
+
+    [Fact]
+    public void 投票の更新に失敗した場合はエラーメッセージが表示される()
+    {
+        var client = RegisterServices();
+        client.Seed("scheduleCandidates", "c1", Seed.ScheduleCandidate(DateTime.Today.AddDays(3), TimeOfDay.Morning));
+        client.FailNextCall("Upsert", "scheduleVotes");
+
+        var cut = Render<SchedulePoll>();
+        cut.Find("button.attend-yes").Click();
+
+        Assert.Contains("投票の更新に失敗しました", cut.Find("p.error-text").TextContent);
+    }
 }

@@ -58,4 +58,18 @@ public class LoginTests : BunitContext
         Assert.Equal("IK1234", profile.LoginId);
         Assert.EndsWith("localhost/", nav.Uri);
     }
+
+    [Fact]
+    public void 通信に失敗した場合はエラーメッセージが表示される()
+    {
+        var client = new FakeFirestoreClient();
+        client.FailNextCall("Query", "members");
+        RegisterServices(client);
+        var cut = Render<Login>();
+
+        cut.Find("input").Input("IK1234");
+        cut.Find("button").Click();
+
+        Assert.Contains("ログインに失敗しました", cut.Find("p.error-text").TextContent);
+    }
 }
