@@ -8,13 +8,18 @@ public class ScheduleVoteRepository(IFirestoreClient client) : IScheduleVoteRepo
 {
     private const string Collection = "scheduleVotes";
 
-    public async Task<List<ScheduleVote>> GetAllAsync(CancellationToken ct = default)
+    /// <summary>
+    /// サーバー側で絞り込んだ結果のみを取得する（コレクション全体は転送しない）。
+    /// </summary>
+    public async Task<List<ScheduleVote>> GetForCandidateAsync(string candidateId, CancellationToken ct = default)
     {
-        var docs = await client.ListDocumentsAsync(Collection, ct);
-        return docs
-            .Where(d => d.GetString("groupId") == FirebaseOptions.GroupId)
-            .Select(ToVote)
-            .ToList();
+        var filters = new Dictionary<string, object?>
+        {
+            ["groupId"] = FirebaseOptions.GroupId,
+            ["candidateId"] = candidateId
+        };
+        var docs = await client.QueryDocumentsAsync(Collection, filters, ct);
+        return docs.Select(ToVote).ToList();
     }
 
     public Task SetStatusAsync(string candidateId, string memberId, string memberName, AttendanceStatus status, DateTime updatedAt, CancellationToken ct = default)
@@ -30,6 +35,12 @@ public class ScheduleVoteRepository(IFirestoreClient client) : IScheduleVoteRepo
             ["updatedAt"] = updatedAt
         };
         return client.UpsertDocumentAsync(Collection, id, fields, ct);
+    }
+
+    public async Task DeleteForCandidateAsync(string candidateId, CancellationToken ct = default)
+    {
+        var votes = await GetForCandidateAsync(candidateId, ct);
+        await Task.WhenAll(votes.Select(v => client.DeleteDocumentAsync(Collection, v.Id, ct)));
     }
 
     private static ScheduleVote ToVote(FirestoreDocument doc) => new()

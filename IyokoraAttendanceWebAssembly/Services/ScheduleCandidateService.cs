@@ -4,7 +4,7 @@ using IyokoraAttendanceWebAssembly.Repositories;
 namespace IyokoraAttendanceWebAssembly.Services;
 
 /// <summary><c>scheduleCandidates</c> に対する日程投票の候補日の取得・作成・削除を担う。</summary>
-public class ScheduleCandidateService(IScheduleCandidateRepository repository)
+public class ScheduleCandidateService(IScheduleCandidateRepository repository, IScheduleVoteRepository voteRepository)
 {
     /// <summary>今日以降の候補日を、日付の古い順に取得する。</summary>
     /// <param name="ct">キャンセルトークン。</param>
@@ -27,9 +27,12 @@ public class ScheduleCandidateService(IScheduleCandidateRepository repository)
         return id;
     }
 
-    /// <summary>指定IDの候補日を削除する。</summary>
+    /// <summary>指定IDの候補日を削除する。あわせて、その候補日に対して登録済みの投票もすべて削除する。</summary>
     /// <param name="candidateId">候補日ID。</param>
     /// <param name="ct">キャンセルトークン。</param>
-    public Task DeleteAsync(string candidateId, CancellationToken ct = default) =>
-        repository.DeleteAsync(candidateId, ct);
+    public async Task DeleteAsync(string candidateId, CancellationToken ct = default)
+    {
+        await voteRepository.DeleteForCandidateAsync(candidateId, ct);
+        await repository.DeleteAsync(candidateId, ct);
+    }
 }

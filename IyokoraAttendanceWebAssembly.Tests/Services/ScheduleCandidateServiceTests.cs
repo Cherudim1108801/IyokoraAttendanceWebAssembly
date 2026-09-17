@@ -14,14 +14,22 @@ public class ScheduleCandidateServiceTests
         TimeOfDay = timeOfDay
     };
 
-    private static (ScheduleCandidateService service, Mock<IScheduleCandidateRepository> repository) CreateService(IEnumerable<ScheduleCandidate>? candidates = null)
+    private static (ScheduleCandidateService service, Mock<IScheduleCandidateRepository> repository, Mock<IScheduleVoteRepository> voteRepository) CreateService(IEnumerable<ScheduleCandidate>? candidates = null)
     {
         var repositoryMock = new Mock<IScheduleCandidateRepository>();
         repositoryMock
             .Setup(r => r.GetAllAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync((candidates ?? []).ToList());
+        repositoryMock
+            .Setup(r => r.DeleteAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
 
-        return (new ScheduleCandidateService(repositoryMock.Object), repositoryMock);
+        var voteRepositoryMock = new Mock<IScheduleVoteRepository>();
+        voteRepositoryMock
+            .Setup(r => r.DeleteForCandidateAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        return (new ScheduleCandidateService(repositoryMock.Object, voteRepositoryMock.Object), repositoryMock, voteRepositoryMock);
     }
 
     [Fact]
@@ -34,10 +42,21 @@ public class ScheduleCandidateServiceTests
             CreateCandidate("c2", today.AddDays(3)),
             CreateCandidate("c3", today.AddDays(-1))
         };
-        var (service, _) = CreateService(candidates);
+        var (service, _, _) = CreateService(candidates);
 
         var upcoming = await service.GetUpcomingAsync();
 
         Assert.Equal(["c2", "c1"], upcoming.Select(c => c.Id));
+    }
+
+    [Fact]
+    public async Task 候補日を削除すると紐づく投票も削除される()
+    {
+        var (service, repository, voteRepository) = CreateService();
+
+        await service.DeleteAsync("c1");
+
+        voteRepository.Verify(r => r.DeleteForCandidateAsync("c1", It.IsAny<CancellationToken>()), Times.Once);
+        repository.Verify(r => r.DeleteAsync("c1", It.IsAny<CancellationToken>()), Times.Once);
     }
 }
