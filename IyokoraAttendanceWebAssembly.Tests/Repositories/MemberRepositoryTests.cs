@@ -27,9 +27,6 @@ public class MemberRepositoryTests
         var list = (docs ?? []).ToList();
         var clientMock = new Mock<IFirestoreClient>();
         clientMock
-            .Setup(c => c.ListDocumentsAsync("members", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(list);
-        clientMock
             .Setup(c => c.QueryDocumentsAsync("members", It.IsAny<IReadOnlyDictionary<string, object?>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((string _, IReadOnlyDictionary<string, object?> filters, CancellationToken _) =>
                 list.Where(d => filters.All(f => d.Fields.TryGetValue(f.Key, out var v) && Equals(v, f.Value))).ToList());
@@ -53,6 +50,21 @@ public class MemberRepositoryTests
         var members = await repository.GetAllAsync();
 
         Assert.Equal(["自団体"], members.Select(m => m.Name));
+    }
+
+    [Fact]
+    public async Task メンバー一覧取得はコレクション全体を取得せずgroupIdで絞り込む()
+    {
+        var docs = new[] { CreateMemberDoc("m1", "自団体", PartType.Soprano, Role.GeneralMember, "IK0001", groupId: FirebaseOptions.GroupId) };
+        var (repository, client) = CreateRepository(docs);
+
+        await repository.GetAllAsync();
+
+        client.Verify(c => c.QueryDocumentsAsync(
+            "members",
+            It.Is<IReadOnlyDictionary<string, object?>>(f => (string)f["groupId"]! == FirebaseOptions.GroupId),
+            It.IsAny<CancellationToken>()), Times.Once);
+        client.Verify(c => c.ListDocumentsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]

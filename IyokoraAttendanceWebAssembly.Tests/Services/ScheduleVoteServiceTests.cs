@@ -18,16 +18,32 @@ public class ScheduleVoteServiceTests
     }
 
     [Fact]
-    public async Task 投票一覧の取得はリポジトリに委譲される()
+    public async Task 指定候補日の投票取得はリポジトリに委譲される()
     {
         var (service, repository) = CreateService();
         repository
-            .Setup(r => r.GetAllAsync(It.IsAny<CancellationToken>()))
+            .Setup(r => r.GetForCandidateAsync("c1", It.IsAny<CancellationToken>()))
             .ReturnsAsync([new ScheduleVote { Id = "v1", CandidateId = "c1", MemberId = "m1", MemberName = "テスト", Status = AttendanceStatus.Attending }]);
 
-        var votes = await service.GetAllAsync();
+        var votes = await service.GetForCandidateAsync("c1");
 
         Assert.Equal(["m1"], votes.Select(v => v.MemberId));
+    }
+
+    [Fact]
+    public async Task 複数候補日分の投票取得は候補日ごとの結果がまとめて返される()
+    {
+        var (service, repository) = CreateService();
+        repository
+            .Setup(r => r.GetForCandidateAsync("c1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new ScheduleVote { Id = "v1", CandidateId = "c1", MemberId = "m1", MemberName = "テスト1", Status = AttendanceStatus.Attending }]);
+        repository
+            .Setup(r => r.GetForCandidateAsync("c2", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new ScheduleVote { Id = "v2", CandidateId = "c2", MemberId = "m2", MemberName = "テスト2", Status = AttendanceStatus.Attending }]);
+
+        var votes = await service.GetForCandidatesAsync(["c1", "c2"]);
+
+        Assert.Equal(["m1", "m2"], votes.Select(v => v.MemberId));
     }
 
     [Fact]

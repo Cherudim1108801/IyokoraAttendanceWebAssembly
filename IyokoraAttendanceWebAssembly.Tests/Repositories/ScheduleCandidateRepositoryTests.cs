@@ -21,10 +21,12 @@ public class ScheduleCandidateRepositoryTests
 
     private static (ScheduleCandidateRepository repository, Mock<IFirestoreClient> client) CreateRepository(IEnumerable<FirestoreDocument>? docs = null)
     {
+        var list = (docs ?? []).ToList();
         var clientMock = new Mock<IFirestoreClient>();
         clientMock
-            .Setup(c => c.ListDocumentsAsync("scheduleCandidates", It.IsAny<CancellationToken>()))
-            .ReturnsAsync((docs ?? []).ToList());
+            .Setup(c => c.QueryDocumentsAsync("scheduleCandidates", It.IsAny<IReadOnlyDictionary<string, object?>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string _, IReadOnlyDictionary<string, object?> filters, CancellationToken _) =>
+                list.Where(d => filters.All(f => d.Fields.TryGetValue(f.Key, out var v) && Equals(v, f.Value))).ToList());
         clientMock
             .Setup(c => c.UpsertDocumentAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Dictionary<string, object?>>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
@@ -44,6 +46,21 @@ public class ScheduleCandidateRepositoryTests
         var all = await repository.GetAllAsync();
 
         Assert.Empty(all);
+    }
+
+    [Fact]
+    public async Task 候補日一覧取得はコレクション全体を取得せずgroupIdで絞り込む()
+    {
+        var docs = new[] { CreateCandidateDoc("c1", DateTime.Today.AddDays(1)) };
+        var (repository, client) = CreateRepository(docs);
+
+        await repository.GetAllAsync();
+
+        client.Verify(c => c.QueryDocumentsAsync(
+            "scheduleCandidates",
+            It.Is<IReadOnlyDictionary<string, object?>>(f => (string)f["groupId"]! == FirebaseOptions.GroupId),
+            It.IsAny<CancellationToken>()), Times.Once);
+        client.Verify(c => c.ListDocumentsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]

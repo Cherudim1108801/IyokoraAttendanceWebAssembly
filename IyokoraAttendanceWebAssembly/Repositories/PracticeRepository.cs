@@ -8,11 +8,14 @@ public class PracticeRepository(IFirestoreClient client) : IPracticeRepository
 {
     private const string Collection = "practices";
 
+    /// <summary>
+    /// サーバー側で絞り込んだ結果のみを取得する（コレクション全体は転送しない）。
+    /// </summary>
     public async Task<List<Practice>> GetAllAsync(CancellationToken ct = default)
     {
-        var docs = await client.ListDocumentsAsync(Collection, ct);
+        var filters = new Dictionary<string, object?> { ["groupId"] = FirebaseOptions.GroupId };
+        var docs = await client.QueryDocumentsAsync(Collection, filters, ct);
         return docs
-            .Where(d => d.GetString("groupId") == FirebaseOptions.GroupId)
             .Select(ToPractice)
             .OrderBy(p => p.Date)
             .ToList();

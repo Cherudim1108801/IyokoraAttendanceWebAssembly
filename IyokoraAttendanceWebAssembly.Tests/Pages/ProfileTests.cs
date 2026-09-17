@@ -167,7 +167,7 @@ public class ProfileTests : BunitContext
     public void 読み込みに失敗した場合はエラーメッセージが表示される()
     {
         var (client, _) = RegisterServices();
-        client.FailNextCall("List", "pieces");
+        client.FailNextCall("Query", "pieces");
 
         var cut = Render<Profile>();
 

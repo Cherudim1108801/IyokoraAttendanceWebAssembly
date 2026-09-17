@@ -8,13 +8,14 @@ public class ScheduleCandidateRepository(IFirestoreClient client) : IScheduleCan
 {
     private const string Collection = "scheduleCandidates";
 
+    /// <summary>
+    /// サーバー側で絞り込んだ結果のみを取得する（コレクション全体は転送しない）。
+    /// </summary>
     public async Task<List<ScheduleCandidate>> GetAllAsync(CancellationToken ct = default)
     {
-        var docs = await client.ListDocumentsAsync(Collection, ct);
-        return docs
-            .Where(d => d.GetString("groupId") == FirebaseOptions.GroupId)
-            .Select(ToCandidate)
-            .ToList();
+        var filters = new Dictionary<string, object?> { ["groupId"] = FirebaseOptions.GroupId };
+        var docs = await client.QueryDocumentsAsync(Collection, filters, ct);
+        return docs.Select(ToCandidate).ToList();
     }
 
     public Task CreateAsync(string candidateId, DateTime date, TimeOfDay timeOfDay, DateTime createdAt, CancellationToken ct = default)

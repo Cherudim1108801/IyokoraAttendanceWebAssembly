@@ -104,7 +104,7 @@ public class PracticeHistoryTests : BunitContext
     public void 読み込みに失敗した場合はエラーメッセージが表示される()
     {
         var client = RegisterServices();
-        client.FailNextCall("List", "practices");
+        client.FailNextCall("Query", "practices");
 
         var cut = Render<PracticeHistory>();
 

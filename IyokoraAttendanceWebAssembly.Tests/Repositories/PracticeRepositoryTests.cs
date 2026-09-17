@@ -28,10 +28,12 @@ public class PracticeRepositoryTests
 
     private static (PracticeRepository repository, Mock<IFirestoreClient> client) CreateRepository(IEnumerable<FirestoreDocument>? docs = null, FirestoreDocument? byIdResult = null)
     {
+        var list = (docs ?? []).ToList();
         var clientMock = new Mock<IFirestoreClient>();
         clientMock
-            .Setup(c => c.ListDocumentsAsync("practices", It.IsAny<CancellationToken>()))
-            .ReturnsAsync((docs ?? []).ToList());
+            .Setup(c => c.QueryDocumentsAsync("practices", It.IsAny<IReadOnlyDictionary<string, object?>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string _, IReadOnlyDictionary<string, object?> filters, CancellationToken _) =>
+                list.Where(d => filters.All(f => d.Fields.TryGetValue(f.Key, out var v) && Equals(v, f.Value))).ToList());
         clientMock
             .Setup(c => c.GetDocumentAsync("practices", It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(byIdResult);
@@ -43,6 +45,36 @@ public class PracticeRepositoryTests
             .Returns(Task.CompletedTask);
 
         return (new PracticeRepository(clientMock.Object), clientMock);
+    }
+
+    [Fact]
+    public async Task 他団体の練習予定は一覧から除外される()
+    {
+        var docs = new[]
+        {
+            CreatePracticeDoc("p1", DateTime.Today.AddDays(1), groupId: FirebaseOptions.GroupId),
+            CreatePracticeDoc("p2", DateTime.Today.AddDays(2), groupId: "other")
+        };
+        var (repository, _) = CreateRepository(docs);
+
+        var practices = await repository.GetAllAsync();
+
+        Assert.Equal(["p1"], practices.Select(p => p.Id));
+    }
+
+    [Fact]
+    public async Task 練習予定一覧取得はコレクション全体を取得せずgroupIdで絞り込む()
+    {
+        var docs = new[] { CreatePracticeDoc("p1", DateTime.Today.AddDays(1), groupId: FirebaseOptions.GroupId) };
+        var (repository, client) = CreateRepository(docs);
+
+        await repository.GetAllAsync();
+
+        client.Verify(c => c.QueryDocumentsAsync(
+            "practices",
+            It.Is<IReadOnlyDictionary<string, object?>>(f => (string)f["groupId"]! == FirebaseOptions.GroupId),
+            It.IsAny<CancellationToken>()), Times.Once);
+        client.Verify(c => c.ListDocumentsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
