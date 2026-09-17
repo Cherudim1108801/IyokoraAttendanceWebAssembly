@@ -22,10 +22,12 @@ public class PieceRepositoryTests
 
     private static (PieceRepository repository, Mock<IFirestoreClient> client) CreateRepository(IEnumerable<FirestoreDocument>? docs = null)
     {
+        var list = (docs ?? []).ToList();
         var clientMock = new Mock<IFirestoreClient>();
         clientMock
-            .Setup(c => c.ListDocumentsAsync("pieces", It.IsAny<CancellationToken>()))
-            .ReturnsAsync((docs ?? []).ToList());
+            .Setup(c => c.QueryDocumentsAsync("pieces", It.IsAny<IReadOnlyDictionary<string, object?>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string _, IReadOnlyDictionary<string, object?> filters, CancellationToken _) =>
+                list.Where(d => filters.All(f => d.Fields.TryGetValue(f.Key, out var v) && Equals(v, f.Value))).ToList());
         clientMock
             .Setup(c => c.UpsertDocumentAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Dictionary<string, object?>>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
@@ -45,6 +47,21 @@ public class PieceRepositoryTests
         var pieces = await repository.GetAllAsync();
 
         Assert.Equal(["自団体の曲"], pieces.Select(p => p.Title));
+    }
+
+    [Fact]
+    public async Task 曲一覧取得はコレクション全体を取得せずgroupIdで絞り込む()
+    {
+        var docs = new[] { CreatePieceDoc("p1", "自団体の曲", groupId: FirebaseOptions.GroupId) };
+        var (repository, client) = CreateRepository(docs);
+
+        await repository.GetAllAsync();
+
+        client.Verify(c => c.QueryDocumentsAsync(
+            "pieces",
+            It.Is<IReadOnlyDictionary<string, object?>>(f => (string)f["groupId"]! == FirebaseOptions.GroupId),
+            It.IsAny<CancellationToken>()), Times.Once);
+        client.Verify(c => c.ListDocumentsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]

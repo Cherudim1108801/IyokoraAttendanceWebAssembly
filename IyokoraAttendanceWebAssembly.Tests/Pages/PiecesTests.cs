@@ -142,7 +142,7 @@ public class PiecesTests : BunitContext
     public void 読み込みに失敗した場合はエラーメッセージが表示される()
     {
         var client = RegisterServices();
-        client.FailNextCall("List", "pieces");
+        client.FailNextCall("Query", "pieces");
 
         var cut = Render<Pieces>();
 

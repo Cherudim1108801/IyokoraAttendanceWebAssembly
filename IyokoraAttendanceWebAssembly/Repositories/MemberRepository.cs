@@ -8,13 +8,14 @@ public class MemberRepository(IFirestoreClient client) : IMemberRepository
 {
     private const string Collection = "members";
 
+    /// <summary>
+    /// サーバー側で絞り込んだ結果のみを取得する（コレクション全体は転送しない）。
+    /// </summary>
     public async Task<List<Member>> GetAllAsync(CancellationToken ct = default)
     {
-        var docs = await client.ListDocumentsAsync(Collection, ct);
-        return docs
-            .Where(d => d.GetString("groupId") == FirebaseOptions.GroupId)
-            .Select(ToMember)
-            .ToList();
+        var filters = new Dictionary<string, object?> { ["groupId"] = FirebaseOptions.GroupId };
+        var docs = await client.QueryDocumentsAsync(Collection, filters, ct);
+        return docs.Select(ToMember).ToList();
     }
 
     public async Task<Member?> FindByLoginIdAsync(string normalizedLoginId, CancellationToken ct = default)

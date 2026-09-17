@@ -8,13 +8,14 @@ public class PieceRepository(IFirestoreClient client) : IPieceRepository
 {
     private const string Collection = "pieces";
 
+    /// <summary>
+    /// サーバー側で絞り込んだ結果のみを取得する（コレクション全体は転送しない）。
+    /// </summary>
     public async Task<List<Piece>> GetAllAsync(CancellationToken ct = default)
     {
-        var docs = await client.ListDocumentsAsync(Collection, ct);
-        return docs
-            .Where(d => d.GetString("groupId") == FirebaseOptions.GroupId)
-            .Select(ToPiece)
-            .ToList();
+        var filters = new Dictionary<string, object?> { ["groupId"] = FirebaseOptions.GroupId };
+        var docs = await client.QueryDocumentsAsync(Collection, filters, ct);
+        return docs.Select(ToPiece).ToList();
     }
 
     public Task SetArchivedAsync(string pieceId, bool isArchived, CancellationToken ct = default)
