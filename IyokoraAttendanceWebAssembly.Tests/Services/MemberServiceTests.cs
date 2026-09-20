@@ -39,6 +39,9 @@ public class MemberServiceTests
         repositoryMock
             .Setup(r => r.UpdateNameAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
+        repositoryMock
+            .Setup(r => r.DeleteAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
 
         // NameCipher は JS Interop (SubtleCrypto) 経由で暗号化・復号するため、
         // IJSRuntime をモックしてそのまま値を通す（暗号化・復号のロジック自体は wwwroot/js のJS実装側にあり対象外）。
@@ -200,5 +203,15 @@ public class MemberServiceTests
 
         var storedName = await upserted.Task;
         Assert.Equal("GCM再暗号化:レガシー太郎", storedName);
+    }
+
+    [Fact]
+    public async Task メンバー削除はリポジトリの削除処理を呼び出す()
+    {
+        var (service, repository) = CreateService();
+
+        await service.DeleteAsync("m1");
+
+        repository.Verify(r => r.DeleteAsync("m1", It.IsAny<CancellationToken>()), Times.Once);
     }
 }

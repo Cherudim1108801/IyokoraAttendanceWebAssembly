@@ -41,4 +41,9 @@ public interface IMemberRepository
     /// <param name="storedName">保存する氏名（暗号化済みの値）。</param>
     /// <param name="ct">キャンセルトークン。</param>
     Task UpdateNameAsync(string memberId, string storedName, CancellationToken ct = default);
+
+    /// <summary>指定メンバーを削除する。</summary>
+    /// <param name="memberId">対象メンバーの MemberId。</param>
+    /// <param name="ct">キャンセルトークン。</param>
+    Task DeleteAsync(string memberId, CancellationToken ct = default);
 }

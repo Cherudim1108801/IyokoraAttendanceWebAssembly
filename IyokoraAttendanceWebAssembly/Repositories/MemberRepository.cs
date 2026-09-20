@@ -62,6 +62,9 @@ public class MemberRepository(IFirestoreClient client) : IMemberRepository
     public Task UpdateNameAsync(string memberId, string storedName, CancellationToken ct = default) =>
         client.UpsertDocumentAsync(Collection, memberId, new Dictionary<string, object?> { ["name"] = storedName }, ct);
 
+    public Task DeleteAsync(string memberId, CancellationToken ct = default) =>
+        client.DeleteDocumentAsync(Collection, memberId, ct);
+
     private static Member ToMember(FirestoreDocument doc) => new()
     {
         Id = doc.Id,

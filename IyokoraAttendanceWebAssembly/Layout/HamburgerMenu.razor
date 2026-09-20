@@ -1,4 +1,5 @@
 @namespace IyokoraAttendanceWebAssembly.Layout
+@inject LocalProfileStore Profile
 
 <button class="hamburger-button" @onclick="ToggleMenu" aria-label="メニュー">
     <span class="hamburger-icon">☰</span>
@@ -36,6 +37,13 @@
             <span class="hamburger-menu-icon">👤</span>
             <span>プロフィール</span>
         </NavLink>
+        @if (Profile.Role == Role.Admin)
+        {
+            <NavLink class="hamburger-menu-item" href="members" @onclick="CloseMenu">
+                <span class="hamburger-menu-icon">🛠️</span>
+                <span>団員管理</span>
+            </NavLink>
+        }
     </nav>
 }
 

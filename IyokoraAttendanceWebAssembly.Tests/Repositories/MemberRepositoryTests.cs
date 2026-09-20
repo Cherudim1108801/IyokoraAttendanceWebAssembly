@@ -33,6 +33,9 @@ public class MemberRepositoryTests
         clientMock
             .Setup(c => c.UpsertDocumentAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Dictionary<string, object?>>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
+        clientMock
+            .Setup(c => c.DeleteDocumentAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
 
         return (new MemberRepository(clientMock.Object), clientMock);
     }
@@ -141,5 +144,15 @@ public class MemberRepositoryTests
             "member1",
             It.Is<Dictionary<string, object?>>(f => f.Count == 1 && (string)f["name"]! == "再暗号化済み氏名"),
             It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task メンバー削除は指定IDのドキュメント削除を呼び出す()
+    {
+        var (repository, client) = CreateRepository();
+
+        await repository.DeleteAsync("member1");
+
+        client.Verify(c => c.DeleteDocumentAsync("members", "member1", It.IsAny<CancellationToken>()), Times.Once);
     }
 }
