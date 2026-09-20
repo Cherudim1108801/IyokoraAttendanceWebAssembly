@@ -70,6 +70,12 @@ public class MemberService(IMemberRepository repository, NameCipher nameCipher, 
         return newLoginId;
     }
 
+    /// <summary>指定メンバーを削除する。</summary>
+    /// <param name="memberId">対象メンバーの MemberId。</param>
+    /// <param name="ct">キャンセルトークン。</param>
+    public Task DeleteAsync(string memberId, CancellationToken ct = default) =>
+        repository.DeleteAsync(memberId, ct);
+
     private async Task<string> GenerateUniqueLoginIdAsync(CancellationToken ct)
     {
         var existing = await repository.GetAllAsync(ct);

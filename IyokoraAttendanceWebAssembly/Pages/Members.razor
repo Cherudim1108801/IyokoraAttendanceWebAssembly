@@ -1,0 +1,97 @@
+@page "/members"
+@inject MemberService MemberService
+@inject LocalProfileStore Profile
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+@if (Profile.Role == Role.Admin)
+{
+    <div class="page-pad">
+
+        @if (!string.IsNullOrEmpty(_errorMessage))
+        {
+            <p class="error-text">@_errorMessage</p>
+        }
+
+        @if (_isBusy)
+        {
+            <p class="hint-text">読み込み中...</p>
+        }
+        else if (_members.Count == 0)
+        {
+            <p class="empty-text">登録されている団員はいません。</p>
+        }
+        else
+        {
+            @foreach (var member in _members)
+            {
+                <div class="list-card">
+                    <div>
+                        <p class="list-card-title">@member.Name</p>
+                        <p class="list-card-sub">ログインID: @member.LoginId</p>
+                        <p class="list-card-sub">最終更新日時: @member.UpdatedAt.ToString("yyyy/MM/dd HH:mm")</p>
+                    </div>
+                    <button class="iyk-btn-text-danger" @onclick="() => DeleteMemberAsync(member)">削除</button>
+                </div>
+            }
+        }
+    </div>
+}
+
+@code {
+    private List<Member> _members = [];
+    private bool _isBusy;
+    private string? _errorMessage;
+
+    protected override Task OnInitializedAsync()
+    {
+        if (Profile.Role != Role.Admin)
+        {
+            Nav.NavigateTo("/");
+            return Task.CompletedTask;
+        }
+
+        return LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _isBusy = true;
+        _errorMessage = null;
+        try
+        {
+            _members = await MemberService.GetAllAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"読み込みに失敗しました。({ex.Message})";
+        }
+        finally
+        {
+            _isBusy = false;
+        }
+    }
+
+    private async Task DeleteMemberAsync(Member member)
+    {
+        if (Profile.Role != Role.Admin)
+            return;
+
+        var confirmed = await JS.InvokeAsync<bool>("confirm",
+            $"{member.Name} さんを削除します。この操作は取り消せず、団員データは失われます。よろしいですか？");
+
+        if (!confirmed)
+            return;
+
+        _errorMessage = null;
+        try
+        {
+            await MemberService.DeleteAsync(member.Id);
+            _members.Remove(member);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"削除に失敗しました。({ex.Message})";
+        }
+    }
+}
