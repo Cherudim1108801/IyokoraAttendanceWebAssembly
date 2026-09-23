@@ -219,7 +219,7 @@ public class PracticeDetailTests : BunitContext
     }
 
     [Fact]
-    public void 管理者が録音リンクを登録すると音源リンクが表示される()
+    public void 管理者が録音リンクを追加すると音源リンクが表示される()
     {
         var (client, _, js) = RegisterServices(Role.Admin);
         client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3), pieces:
@@ -229,7 +229,7 @@ public class PracticeDetailTests : BunitContext
         js.Setup(j => j.InvokeAsync<string?>("prompt", It.IsAny<object?[]>())).ReturnsAsync("https://example.com/rec");
 
         var cut = Render();
-        // [0]=タイムスケジュール編集 [1]=演奏予定曲編集 [2]=この曲の録音リンク編集(録音未登録のため注目ボタンは無い)
+        // [0]=タイムスケジュール編集 [1]=演奏予定曲編集 [2]=＋ 録音を追加(録音未登録のため他のボタンは無い)
         cut.FindAll("button.iyk-btn-text")[2].Click();
 
         Assert.Contains("録音を聴く", cut.Markup);
@@ -237,7 +237,7 @@ public class PracticeDetailTests : BunitContext
     }
 
     [Fact]
-    public void 録音リンクを登録しても各コレクションの再取得は発生しない()
+    public void 録音リンクを追加しても各コレクションの再取得は発生しない()
     {
         var (client, _, js) = RegisterServices(Role.Admin);
         client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3), pieces:
@@ -270,12 +270,30 @@ public class PracticeDetailTests : BunitContext
     }
 
     [Fact]
+    public void 同じ曲に2件目の録音を追加すると両方表示される()
+    {
+        var (client, _, js) = RegisterServices(Role.Admin);
+        client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3), pieces:
+        [
+            new() { PieceId = "pc1", Title = "曲A", Recordings = [new() { Id = "r1", Url = "https://example.com/rec1", IsFeatured = false }] }
+        ]));
+        js.Setup(j => j.InvokeAsync<string?>("prompt", It.IsAny<object?[]>())).ReturnsAsync("https://example.com/rec2");
+
+        var cut = Render();
+        // [0]=タイムスケジュール編集 [1]=演奏予定曲編集 [2]=★注目に設定 [3]=編集 [4]=＋録音を追加
+        cut.FindAll("button.iyk-btn-text")[4].Click();
+
+        var links = cut.FindAll("a").Where(a => a.TextContent.Contains("録音を聴く")).ToList();
+        Assert.Equal(2, links.Count);
+    }
+
+    [Fact]
     public void 録音済みの曲を注目に設定すると表示が切り替わる()
     {
         var (client, _, _) = RegisterServices(Role.Admin);
         client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3), pieces:
         [
-            new() { PieceId = "pc1", Title = "曲A", RecordingUrl = "https://example.com/rec", IsFeatured = false }
+            new() { PieceId = "pc1", Title = "曲A", Recordings = [new() { Id = "r1", Url = "https://example.com/rec", IsFeatured = false }] }
         ]));
 
         var cut = Render();
@@ -294,7 +312,7 @@ public class PracticeDetailTests : BunitContext
         var (client, _, _) = RegisterServices(Role.Admin);
         client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3), pieces:
         [
-            new() { PieceId = "pc1", Title = "曲A", RecordingUrl = "https://example.com/rec", IsFeatured = true }
+            new() { PieceId = "pc1", Title = "曲A", Recordings = [new() { Id = "r1", Url = "https://example.com/rec", IsFeatured = true }] }
         ]));
 
         var cut = Render();
@@ -312,7 +330,7 @@ public class PracticeDetailTests : BunitContext
         var (client, _, _) = RegisterServices(Role.Admin);
         client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3), pieces:
         [
-            new() { PieceId = "pc1", Title = "曲A", RecordingUrl = "https://example.com/rec", IsFeatured = false }
+            new() { PieceId = "pc1", Title = "曲A", Recordings = [new() { Id = "r1", Url = "https://example.com/rec", IsFeatured = false }] }
         ]));
 
         var cut = Render();
@@ -320,6 +338,27 @@ public class PracticeDetailTests : BunitContext
         cut.FindAll("button.iyk-btn-text")[2].Click();
 
         Assert.Equal(callsAfterLoad, client.Calls.Count);
+    }
+
+    [Fact]
+    public void 録音を編集して空欄で保存するとその録音だけ削除される()
+    {
+        var (client, _, js) = RegisterServices(Role.Admin);
+        client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3), pieces:
+        [
+            new() { PieceId = "pc1", Title = "曲A", Recordings = [
+                new() { Id = "r1", Url = "https://example.com/rec1", IsFeatured = false },
+                new() { Id = "r2", Url = "https://example.com/rec2", IsFeatured = false }
+            ] }
+        ]));
+        js.Setup(j => j.InvokeAsync<string?>("prompt", It.IsAny<object?[]>())).ReturnsAsync("");
+
+        var cut = Render();
+        // [0]=タイムスケジュール編集 [1]=演奏予定曲編集 [2]=1件目★注目に設定 [3]=1件目編集 [4]=2件目★注目に設定 [5]=2件目編集 [6]=＋録音を追加
+        cut.FindAll("button.iyk-btn-text")[3].Click();
+
+        var links = cut.FindAll("a").Where(a => a.TextContent.Contains("録音を聴く")).ToList();
+        Assert.Single(links);
     }
 
     [Fact]
@@ -471,7 +510,7 @@ public class PracticeDetailTests : BunitContext
         var (client, _, _) = RegisterServices(Role.Admin);
         client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3), pieces:
         [
-            new() { PieceId = "pc1", Title = "曲A", RecordingUrl = "https://example.com/rec", IsFeatured = false }
+            new() { PieceId = "pc1", Title = "曲A", Recordings = [new() { Id = "r1", Url = "https://example.com/rec", IsFeatured = false }] }
         ]));
         client.FailNextCall("Upsert", "practices");
 

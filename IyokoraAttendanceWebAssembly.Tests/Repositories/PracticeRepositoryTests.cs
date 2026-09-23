@@ -215,7 +215,7 @@ public class PracticeRepositoryTests
         var pieces = new List<PracticePieceRef>
         {
             new() { PieceId = "piece1", Title = "曲A" },
-            new() { PieceId = "piece2", Title = "曲B", RecordingUrl = "https://example.com", IsFeatured = true }
+            new() { PieceId = "piece2", Title = "曲B", Recordings = [new() { Id = "rec1", Url = "https://example.com", IsFeatured = true }] }
         };
 
         await repository.UpdatePiecesAsync("practice1", pieces);
@@ -225,8 +225,53 @@ public class PracticeRepositoryTests
             "practice1",
             It.Is<Dictionary<string, object?>>(f =>
                 ((List<object?>)f["pieces"]!).Cast<Dictionary<string, object?>>().Select(p => (string)p["pieceId"]!).SequenceEqual(new[] { "piece1", "piece2" }) &&
-                ((List<object?>)f["pieces"]!).Cast<Dictionary<string, object?>>().First(p => (string)p["pieceId"]! == "piece2")["recordingUrl"] as string == "https://example.com" &&
-                (bool)((List<object?>)f["pieces"]!).Cast<Dictionary<string, object?>>().First(p => (string)p["pieceId"]! == "piece2")["featured"]! == true),
+                GetRecordings(f, "piece2").Single()["url"] as string == "https://example.com" &&
+                (bool)GetRecordings(f, "piece2").Single()["featured"]! == true),
             It.IsAny<CancellationToken>()), Times.Once);
     }
+
+    [Fact]
+    public async Task 演奏予定曲を更新すると1曲に複数の録音を保存できる()
+    {
+        var (repository, client) = CreateRepository();
+        var pieces = new List<PracticePieceRef>
+        {
+            new() { PieceId = "piece1", Title = "曲A", Recordings = [
+                new() { Id = "rec1", Url = "https://example.com/1", IsFeatured = false },
+                new() { Id = "rec2", Url = "https://example.com/2", IsFeatured = true }
+            ] }
+        };
+
+        await repository.UpdatePiecesAsync("practice1", pieces);
+
+        client.Verify(c => c.UpsertDocumentAsync(
+            "practices",
+            "practice1",
+            It.Is<Dictionary<string, object?>>(f => GetRecordings(f, "piece1").Count == 2),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task 旧形式の録音URLは読み込み時に録音1件として移行される()
+    {
+        var pieces = new List<object?>
+        {
+            new Dictionary<string, object?> { ["pieceId"] = "piece1", ["title"] = "曲A", ["recordingUrl"] = "https://example.com/legacy", ["featured"] = true }
+        };
+        var doc = CreatePracticeDoc("p1", DateTime.Today, groupId: FirebaseOptions.GroupId, pieces: pieces);
+        var (repository, _) = CreateRepository([doc]);
+
+        var practices = await repository.GetAllAsync();
+
+        var recording = Assert.Single(Assert.Single(practices).Pieces.Single().Recordings);
+        Assert.Equal("https://example.com/legacy", recording.Url);
+        Assert.True(recording.IsFeatured);
+    }
+
+    private static List<Dictionary<string, object?>> GetRecordings(Dictionary<string, object?> fields, string pieceId) =>
+        ((List<object?>)((List<object?>)fields["pieces"]!)
+            .Cast<Dictionary<string, object?>>()
+            .First(p => (string)p["pieceId"]! == pieceId)["recordings"]!)
+        .Cast<Dictionary<string, object?>>()
+        .ToList();
 }

@@ -4,55 +4,40 @@ namespace IyokoraAttendanceWebAssembly.Tests.Models;
 
 public class SongParticipationTests
 {
-    private static SongParticipation Create(string? recordingUrl, bool isFeatured) => new()
+    private static SongParticipation Create(List<PracticeRecording> recordings) => new()
     {
         PieceId = "p1",
         Title = "曲A",
         Dots = [],
-        RecordingUrl = recordingUrl,
-        IsFeatured = isFeatured
+        Recordings = recordings
     };
 
     [Fact]
-    public void 録音URLが未登録の場合はHasRecordingUrlがfalseになる()
+    public void 録音が未登録の場合はHasRecordingsがfalseになる()
     {
-        var song = Create(recordingUrl: null, isFeatured: false);
+        var song = Create([]);
 
-        Assert.False(song.HasRecordingUrl);
+        Assert.False(song.HasRecordings);
     }
 
     [Fact]
-    public void 録音URLが登録済みの場合はHasRecordingUrlがtrueになる()
+    public void 録音が1件でも登録済みの場合はHasRecordingsがtrueになる()
     {
-        var song = Create(recordingUrl: "https://example.com/rec", isFeatured: false);
+        var song = Create([new() { Id = "r1", Url = "https://example.com/rec", IsFeatured = false }]);
 
-        Assert.True(song.HasRecordingUrl);
+        Assert.True(song.HasRecordings);
     }
 
     [Fact]
-    public void 録音未登録の場合は強調表示のオンオフどちらも提示できない()
+    public void 同じ曲に複数件の録音を登録できる()
     {
-        var song = Create(recordingUrl: null, isFeatured: false);
+        var song = Create([
+            new() { Id = "r1", Url = "https://example.com/rec1", IsFeatured = false },
+            new() { Id = "r2", Url = "https://example.com/rec2", IsFeatured = true }
+        ]);
 
-        Assert.False(song.CanToggleFeaturedOn);
-        Assert.False(song.CanToggleFeaturedOff);
-    }
-
-    [Fact]
-    public void 録音登録済みで未強調の場合は強調オンのみ提示できる()
-    {
-        var song = Create(recordingUrl: "https://example.com/rec", isFeatured: false);
-
-        Assert.True(song.CanToggleFeaturedOn);
-        Assert.False(song.CanToggleFeaturedOff);
-    }
-
-    [Fact]
-    public void 録音登録済みで強調中の場合は強調オフのみ提示できる()
-    {
-        var song = Create(recordingUrl: "https://example.com/rec", isFeatured: true);
-
-        Assert.False(song.CanToggleFeaturedOn);
-        Assert.True(song.CanToggleFeaturedOff);
+        Assert.Equal(2, song.Recordings.Count);
+        Assert.Contains(song.Recordings, r => r is { Id: "r1", IsFeatured: false });
+        Assert.Contains(song.Recordings, r => r is { Id: "r2", IsFeatured: true });
     }
 }

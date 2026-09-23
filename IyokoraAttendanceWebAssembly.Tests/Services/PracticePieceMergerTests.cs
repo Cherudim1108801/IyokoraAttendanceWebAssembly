@@ -6,11 +6,11 @@ namespace IyokoraAttendanceWebAssembly.Tests.Services;
 public class PracticePieceMergerTests
 {
     [Fact]
-    public void 既存の演奏予定曲は録音リンクと強調表示の設定を維持したまま残る()
+    public void 既存の演奏予定曲は録音一覧を維持したまま残る()
     {
         var existing = new List<PracticePieceRef>
         {
-            new() { PieceId = "piece1", Title = "曲A", RecordingUrl = "https://example.com/rec", IsFeatured = true }
+            new() { PieceId = "piece1", Title = "曲A", Recordings = [new() { Id = "r1", Url = "https://example.com/rec", IsFeatured = true }] }
         };
         var selections = new List<PieceSelectionInput>
         {
@@ -20,12 +20,13 @@ public class PracticePieceMergerTests
         var merged = PracticePieceMerger.MergeSelectedPieces(existing, selections);
 
         var result = Assert.Single(merged);
-        Assert.Equal("https://example.com/rec", result.RecordingUrl);
-        Assert.True(result.IsFeatured);
+        var recording = Assert.Single(result.Recordings);
+        Assert.Equal("https://example.com/rec", recording.Url);
+        Assert.True(recording.IsFeatured);
     }
 
     [Fact]
-    public void 新たに選択した曲は録音リンク未登録かつ強調表示なしで追加される()
+    public void 新たに選択した曲は録音未登録で追加される()
     {
         var existing = new List<PracticePieceRef>();
         var selections = new List<PieceSelectionInput>
@@ -38,8 +39,7 @@ public class PracticePieceMergerTests
         var result = Assert.Single(merged);
         Assert.Equal("piece1", result.PieceId);
         Assert.Equal("曲A", result.Title);
-        Assert.Null(result.RecordingUrl);
-        Assert.False(result.IsFeatured);
+        Assert.Empty(result.Recordings);
     }
 
     [Fact]
@@ -47,7 +47,7 @@ public class PracticePieceMergerTests
     {
         var existing = new List<PracticePieceRef>
         {
-            new() { PieceId = "piece1", Title = "曲A", RecordingUrl = "https://example.com", IsFeatured = true }
+            new() { PieceId = "piece1", Title = "曲A", Recordings = [new() { Id = "r1", Url = "https://example.com", IsFeatured = true }] }
         };
         var selections = new List<PieceSelectionInput>
         {
@@ -64,7 +64,7 @@ public class PracticePieceMergerTests
     {
         var existing = new List<PracticePieceRef>
         {
-            new() { PieceId = "piece1", Title = "曲A", RecordingUrl = "https://example.com", IsFeatured = true }
+            new() { PieceId = "piece1", Title = "曲A", Recordings = [new() { Id = "r1", Url = "https://example.com", IsFeatured = true }] }
         };
         var selections = new List<PieceSelectionInput>
         {
@@ -76,7 +76,7 @@ public class PracticePieceMergerTests
         var merged = PracticePieceMerger.MergeSelectedPieces(existing, selections);
 
         Assert.Equal(["piece1", "piece2"], merged.Select(p => p.PieceId));
-        Assert.Equal("https://example.com", merged[0].RecordingUrl);
-        Assert.Null(merged[1].RecordingUrl);
+        Assert.Equal("https://example.com", merged[0].Recordings.Single().Url);
+        Assert.Empty(merged[1].Recordings);
     }
 }

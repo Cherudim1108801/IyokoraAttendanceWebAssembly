@@ -75,8 +75,7 @@
             var items = practices
                 .OrderByDescending(p => p.Date)
                 .SelectMany(p => p.Pieces
-                    .Where(piece => !string.IsNullOrEmpty(piece.RecordingUrl))
-                    .Select(piece => new RecordingItem
+                    .SelectMany(piece => piece.Recordings.Select(recording => new RecordingItem
                     {
                         PracticeId = p.Id,
                         PieceId = piece.PieceId,
@@ -84,9 +83,9 @@
                         PracticeLabel = string.IsNullOrEmpty(p.Title)
                             ? $"{p.Date:yyyy年M月d日}の練習"
                             : $"{p.Date:yyyy年M月d日} {p.Title}",
-                        RecordingUrl = piece.RecordingUrl!,
-                        IsFeatured = piece.IsFeatured
-                    }))
+                        RecordingUrl = recording.Url,
+                        IsFeatured = recording.IsFeatured
+                    })))
                 .ToList();
 
             _featuredRecordings = items.Where(i => i.IsFeatured).ToList();

@@ -45,8 +45,10 @@ internal static class Seed
             {
                 ["pieceId"] = p.PieceId,
                 ["title"] = p.Title,
-                ["recordingUrl"] = p.RecordingUrl,
-                ["featured"] = p.IsFeatured
+                ["recordings"] = p.Recordings
+                    .Select(r => new Dictionary<string, object?> { ["id"] = r.Id, ["url"] = r.Url, ["featured"] = r.IsFeatured })
+                    .Cast<object?>()
+                    .ToList()
             })
             .Cast<object?>()
             .ToList(),
@@ -85,6 +87,14 @@ internal static class Seed
         ["date"] = DateTime.SpecifyKind(date.Date, DateTimeKind.Utc),
         ["timeOfDay"] = timeOfDay.ToString(),
         ["createdAt"] = DateTime.UtcNow
+    };
+
+    /// <summary>テスト用の <see cref="PracticeRecording"/> を組み立てる。IDを省略した場合は毎回異なる値になる。</summary>
+    public static PracticeRecording Recording(string url, bool isFeatured = false, string? id = null) => new()
+    {
+        Id = id ?? Guid.NewGuid().ToString("N"),
+        Url = url,
+        IsFeatured = isFeatured
     };
 
     public static Dictionary<string, object?> ScheduleVote(string candidateId, string memberId, string memberName, AttendanceStatus status, string groupId = FirebaseOptions.GroupId) => new()

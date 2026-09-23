@@ -81,46 +81,6 @@ public class PracticeService(IPracticeRepository repository)
     public Task DeleteAsync(string practiceId, CancellationToken ct = default) =>
         repository.DeleteAsync(practiceId, ct);
 
-    /// <summary>指定の練習における、指定の曲の録音音源リンクを設定・変更・削除する。</summary>
-    /// <param name="practiceId">練習予定ID。</param>
-    /// <param name="pieceId">対象の曲ID。</param>
-    /// <param name="recordingUrl">録音音源へのリンク（OneDriveなど）。削除する場合は null。</param>
-    /// <param name="ct">キャンセルトークン。</param>
-    public async Task SetPieceRecordingUrlAsync(string practiceId, string pieceId, string? recordingUrl, CancellationToken ct = default)
-    {
-        var practice = await GetByIdAsync(practiceId, ct);
-        if (practice is null)
-            return;
-
-        var updatedPieces = practice.Pieces
-            .Select(p => p.PieceId == pieceId
-                ? new PracticePieceRef { PieceId = p.PieceId, Title = p.Title, RecordingUrl = recordingUrl, IsFeatured = p.IsFeatured }
-                : p)
-            .ToList();
-
-        await repository.UpdatePiecesAsync(practiceId, updatedPieces, ct);
-    }
-
-    /// <summary>指定の練習における、指定の曲の録音を「音源」タブで強調表示（ピン留め）するかどうかを設定する。</summary>
-    /// <param name="practiceId">練習予定ID。</param>
-    /// <param name="pieceId">対象の曲ID。</param>
-    /// <param name="isFeatured">強調表示するかどうか。</param>
-    /// <param name="ct">キャンセルトークン。</param>
-    public async Task SetPieceRecordingFeaturedAsync(string practiceId, string pieceId, bool isFeatured, CancellationToken ct = default)
-    {
-        var practice = await GetByIdAsync(practiceId, ct);
-        if (practice is null)
-            return;
-
-        var updatedPieces = practice.Pieces
-            .Select(p => p.PieceId == pieceId
-                ? new PracticePieceRef { PieceId = p.PieceId, Title = p.Title, RecordingUrl = p.RecordingUrl, IsFeatured = isFeatured }
-                : p)
-            .ToList();
-
-        await repository.UpdatePiecesAsync(practiceId, updatedPieces, ct);
-    }
-
     /// <summary>指定の練習の鍵の受け取り状況を設定する。受け取り済みにする場合は、受け取ったメンバーの名前を記録する。</summary>
     /// <param name="practiceId">練習予定ID。</param>
     /// <param name="keyPickedUp">受け取り済みかどうか。</param>
