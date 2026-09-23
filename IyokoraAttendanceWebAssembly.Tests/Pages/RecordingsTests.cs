@@ -110,6 +110,33 @@ public class RecordingsTests : BunitContext
     }
 
     [Fact]
+    public void 日付ごとにグルーピングされ新しい日付から順に表示される()
+    {
+        var client = RegisterServices();
+        client.Seed("practices", "old", Seed.Practice(DateTime.Today.AddDays(-10), pieces:
+        [
+            new() { PieceId = "pc1", Title = "古い曲1", Recordings = [Seed.Recording("https://example.com/old1")] },
+            new() { PieceId = "pc2", Title = "古い曲2", Recordings = [Seed.Recording("https://example.com/old2")] }
+        ]));
+        client.Seed("practices", "recent", Seed.Practice(DateTime.Today.AddDays(-1), pieces:
+        [
+            new() { PieceId = "pc3", Title = "新しい曲", Recordings = [Seed.Recording("https://example.com/recent")] }
+        ]));
+
+        var cut = Render<Recordings>();
+
+        var groupTitles = cut.FindAll("p.date-group-title").Select(e => e.TextContent).ToList();
+        Assert.Equal(
+        [
+            DateTime.Today.AddDays(-1).ToString("yyyy年M月d日"),
+            DateTime.Today.AddDays(-10).ToString("yyyy年M月d日")
+        ], groupTitles);
+
+        var titles = cut.FindAll("p.list-card-title").Select(e => e.TextContent).ToList();
+        Assert.Equal(["新しい曲", "古い曲1", "古い曲2"], titles);
+    }
+
+    [Fact]
     public void 読み込みに失敗した場合はエラーメッセージが表示される()
     {
         var client = RegisterServices();

@@ -6,6 +6,9 @@ public class RecordingItem
     public required string PracticeId { get; init; }
     public required string PieceId { get; init; }
 
+    /// <summary>この録音が行われた練習の日付。</summary>
+    public required DateTime Date { get; init; }
+
     /// <summary>曲名。</summary>
     public required string Title { get; init; }
 

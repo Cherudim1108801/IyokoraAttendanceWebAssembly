@@ -40,24 +40,28 @@
 
         <div class="section">
             <h3 class="section-title">すべての録音</h3>
-            @foreach (var item in _allRecordings)
+            @foreach (var group in _allRecordings.GroupBy(item => item.Date.Date))
             {
-                <a class="list-card clickable" style="text-decoration:none;color:inherit;" href="@item.RecordingUrl" target="_blank" rel="noopener noreferrer">
-                    <div>
-                        <p class="list-card-title">
-                            @if (item.IsFeatured)
+                <p class="date-group-title">@group.Key.ToString("yyyy年M月d日")</p>
+                @foreach (var item in group)
+                {
+                    <a class="list-card clickable" style="text-decoration:none;color:inherit;" href="@item.RecordingUrl" target="_blank" rel="noopener noreferrer">
+                        <div>
+                            <p class="list-card-title">
+                                @if (item.IsFeatured)
+                                {
+                                    <span class="badge-star">★ </span>
+                                }
+                                @item.Title
+                            </p>
+                            @if (!string.IsNullOrEmpty(item.RecordingName))
                             {
-                                <span class="badge-star">★ </span>
+                                <p class="list-card-sub">@item.RecordingName</p>
                             }
-                            @item.Title
-                        </p>
-                        @if (!string.IsNullOrEmpty(item.RecordingName))
-                        {
-                            <p class="list-card-sub">@item.RecordingName</p>
-                        }
-                        <p class="list-card-sub">@item.PracticeLabel</p>
-                    </div>
-                </a>
+                            <p class="list-card-sub">@item.PracticeLabel</p>
+                        </div>
+                    </a>
+                }
             }
         </div>
     }
@@ -87,6 +91,7 @@
                     {
                         PracticeId = p.Id,
                         PieceId = piece.PieceId,
+                        Date = p.Date,
                         Title = piece.Title,
                         RecordingName = recording.Name,
                         PracticeLabel = string.IsNullOrEmpty(p.Title)
