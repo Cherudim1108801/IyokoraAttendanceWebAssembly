@@ -104,8 +104,17 @@ public class PracticeRepository(IFirestoreClient client) : IPracticeRepository
         {
             ["pieceId"] = p.PieceId,
             ["title"] = p.Title,
-            ["recordingUrl"] = p.RecordingUrl,
-            ["featured"] = p.IsFeatured
+            ["recordings"] = ToRecordingFields(p.Recordings)
+        })
+        .Cast<object?>()
+        .ToList();
+
+    private static List<object?> ToRecordingFields(IReadOnlyList<PracticeRecording> recordings) => recordings
+        .Select(r => new Dictionary<string, object?>
+        {
+            ["id"] = r.Id,
+            ["url"] = r.Url,
+            ["featured"] = r.IsFeatured
         })
         .Cast<object?>()
         .ToList();
@@ -136,7 +145,30 @@ public class PracticeRepository(IFirestoreClient client) : IPracticeRepository
     {
         PieceId = fields.GetValueOrDefault("pieceId") as string ?? string.Empty,
         Title = fields.GetValueOrDefault("title") as string ?? string.Empty,
-        RecordingUrl = fields.GetValueOrDefault("recordingUrl") as string,
+        Recordings = ToRecordings(fields)
+    };
+
+    /// <summary>
+    /// 曲ごとの録音一覧を読み取る。新形式の <c>recordings</c> 配列があればそれを使い、無い場合は
+    /// 1曲につき録音1件のみだった旧形式（<c>recordingUrl</c>・<c>featured</c>）から移行して読み込む。
+    /// 移行時に発行したIDは、次回保存（<see cref="UpdatePiecesAsync"/>）時に新形式として永続化される。
+    /// </summary>
+    private static List<PracticeRecording> ToRecordings(Dictionary<string, object?> fields)
+    {
+        if (fields.GetValueOrDefault("recordings") is List<object?> recordingsRaw)
+            return recordingsRaw.OfType<Dictionary<string, object?>>().Select(ToRecording).ToList();
+
+        var legacyUrl = fields.GetValueOrDefault("recordingUrl") as string;
+        if (string.IsNullOrEmpty(legacyUrl))
+            return [];
+
+        return [new PracticeRecording { Id = Guid.NewGuid().ToString("N"), Url = legacyUrl, IsFeatured = fields.GetValueOrDefault("featured") as bool? ?? false }];
+    }
+
+    private static PracticeRecording ToRecording(Dictionary<string, object?> fields) => new()
+    {
+        Id = fields.GetValueOrDefault("id") as string ?? string.Empty,
+        Url = fields.GetValueOrDefault("url") as string ?? string.Empty,
         IsFeatured = fields.GetValueOrDefault("featured") as bool? ?? false
     };
 }

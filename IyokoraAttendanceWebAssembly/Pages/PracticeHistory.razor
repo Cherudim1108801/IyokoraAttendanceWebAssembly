@@ -1,6 +1,7 @@
 @page "/history"
 @inject PracticeService PracticeService
 @inject LocalProfileStore Profile
+@inject IJSRuntime JS
 @inject NavigationManager Nav
 
 <div class="page-pad">
@@ -38,11 +39,66 @@
                         <p class="list-card-sub">🎵 @practice.PiecesSummary</p>
                     }
                 </div>
-                @if (Profile.Role == Role.Admin)
-                {
-                    <button class="iyk-btn-text-danger" @onclick="() => DeletePracticeAsync(practice)" @onclick:stopPropagation="true">削除</button>
-                }
+                <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;" @onclick:stopPropagation="true">
+                    @if (practice.Pieces.Count > 0)
+                    {
+                        <button class="iyk-btn-text" @onclick="() => ToggleRecordingPanel(practice)">@(_expandedPracticeId == practice.Id ? "音源を閉じる" : "🎵 音源を管理")</button>
+                    }
+                    @if (Profile.Role == Role.Admin)
+                    {
+                        <button class="iyk-btn-text-danger" @onclick="() => DeletePracticeAsync(practice)">削除</button>
+                    }
+                </div>
             </div>
+
+            @if (_expandedPracticeId == practice.Id)
+            {
+                <div class="highlight-card" style="margin-top:-4px;" @onclick:stopPropagation="true">
+                    @foreach (var piece in practice.Pieces)
+                    {
+                        <div style="margin-bottom:12px;">
+                            <p style="font-weight:bold;font-size:14px;margin:0 0 6px;">@piece.Title</p>
+
+                            @if (piece.Recordings.Count == 0)
+                            {
+                                <p class="hint-text" style="margin:0;">録音リンク未登録</p>
+                            }
+                            else
+                            {
+                                @foreach (var recording in piece.Recordings)
+                                {
+                                    <div style="display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap;">
+                                        @if (recording.IsFeatured)
+                                        {
+                                            <span class="badge-star">★</span>
+                                        }
+                                        <a href="@recording.Url" target="_blank" rel="noopener noreferrer" style="font-size:13px;color:#512BD4;">🎵 録音を聴く</a>
+
+                                        @if (Profile.Role == Role.Admin)
+                                        {
+                                            <span style="flex:1;"></span>
+                                            @if (!recording.IsFeatured)
+                                            {
+                                                <button class="iyk-btn-text" @onclick="() => ToggleRecordingFeaturedAsync(practice, piece, recording)">★ 注目に設定</button>
+                                            }
+                                            else
+                                            {
+                                                <button class="iyk-btn-text-star" @onclick="() => ToggleRecordingFeaturedAsync(practice, piece, recording)">★ 注目解除</button>
+                                            }
+                                            <button class="iyk-btn-text" @onclick="() => EditRecordingAsync(practice, piece, recording)">編集</button>
+                                        }
+                                    </div>
+                                }
+                            }
+
+                            @if (Profile.Role == Role.Admin)
+                            {
+                                <button class="iyk-btn-text" style="margin-top:4px;" @onclick="() => AddRecordingAsync(practice, piece)">＋ 録音を追加</button>
+                            }
+                        </div>
+                    }
+                </div>
+            }
         }
     }
 </div>
@@ -51,6 +107,7 @@
     private List<Practice> _practices = [];
     private bool _isBusy;
     private string? _errorMessage;
+    private string? _expandedPracticeId;
 
     protected override Task OnInitializedAsync() => LoadAsync();
 
@@ -89,4 +146,108 @@
     }
 
     private void OpenDetail(Practice practice) => Nav.NavigateTo($"practice/{practice.Id}");
+
+    private void ToggleRecordingPanel(Practice practice) =>
+        _expandedPracticeId = _expandedPracticeId == practice.Id ? null : practice.Id;
+
+    private async Task AddRecordingAsync(Practice practice, PracticePieceRef piece)
+    {
+        if (Profile.Role != Role.Admin)
+            return;
+
+        var input = await JS.InvokeAsync<string?>("prompt", $"{piece.Title} の録音リンクを追加\nOneDriveの共有リンクを入力してください。");
+        if (input is null)
+            return;
+
+        var trimmed = input.Trim();
+        if (trimmed.Length == 0)
+            return;
+
+        if (!Uri.TryCreate(trimmed, UriKind.Absolute, out _))
+        {
+            _errorMessage = "リンクの形式が正しくありません。";
+            return;
+        }
+
+        _errorMessage = null;
+        var newRecording = new PracticeRecording { Id = Guid.NewGuid().ToString("N"), Url = trimmed, IsFeatured = false };
+        var updatedPieces = BuildUpdatedPieces(practice, piece.PieceId, p => new PracticePieceRef { PieceId = p.PieceId, Title = p.Title, Recordings = [.. p.Recordings, newRecording] });
+        try
+        {
+            await PracticeService.UpdatePiecesAsync(practice.Id, updatedPieces);
+            practice.Pieces = updatedPieces;
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"録音リンクの保存に失敗しました。({ex.Message})";
+        }
+    }
+
+    private async Task EditRecordingAsync(Practice practice, PracticePieceRef piece, PracticeRecording recording)
+    {
+        if (Profile.Role != Role.Admin)
+            return;
+
+        var input = await JS.InvokeAsync<string?>("prompt",
+            $"{piece.Title} の録音リンク\nOneDriveの共有リンクを入力してください。空欄で保存するとこの録音を削除します。",
+            recording.Url);
+
+        if (input is null)
+            return;
+
+        var trimmed = input.Trim();
+        if (trimmed.Length > 0 && !Uri.TryCreate(trimmed, UriKind.Absolute, out _))
+        {
+            _errorMessage = "リンクの形式が正しくありません。";
+            return;
+        }
+
+        _errorMessage = null;
+        var updatedPieces = BuildUpdatedPieces(practice, piece.PieceId, p => new PracticePieceRef
+        {
+            PieceId = p.PieceId,
+            Title = p.Title,
+            Recordings = trimmed.Length == 0
+                ? p.Recordings.Where(r => r.Id != recording.Id).ToList()
+                : p.Recordings.Select(r => r.Id == recording.Id ? new PracticeRecording { Id = r.Id, Url = trimmed, IsFeatured = r.IsFeatured } : r).ToList()
+        });
+        try
+        {
+            await PracticeService.UpdatePiecesAsync(practice.Id, updatedPieces);
+            practice.Pieces = updatedPieces;
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"録音リンクの保存に失敗しました。({ex.Message})";
+        }
+    }
+
+    private async Task ToggleRecordingFeaturedAsync(Practice practice, PracticePieceRef piece, PracticeRecording recording)
+    {
+        if (Profile.Role != Role.Admin)
+            return;
+
+        var isFeatured = !recording.IsFeatured;
+        var updatedPieces = BuildUpdatedPieces(practice, piece.PieceId, p => new PracticePieceRef
+        {
+            PieceId = p.PieceId,
+            Title = p.Title,
+            Recordings = p.Recordings.Select(r => r.Id == recording.Id ? new PracticeRecording { Id = r.Id, Url = r.Url, IsFeatured = isFeatured } : r).ToList()
+        });
+        try
+        {
+            await PracticeService.UpdatePiecesAsync(practice.Id, updatedPieces);
+            practice.Pieces = updatedPieces;
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"更新に失敗しました。({ex.Message})";
+        }
+    }
+
+    /// <summary>
+    /// <paramref name="practice"/> の演奏予定曲一覧のうち、指定した曲IDのエントリだけを差し替えた新しい一覧を組み立てる。
+    /// </summary>
+    private static List<PracticePieceRef> BuildUpdatedPieces(Practice practice, string pieceId, Func<PracticePieceRef, PracticePieceRef> update) =>
+        practice.Pieces.Select(p => p.PieceId == pieceId ? update(p) : p).ToList();
 }

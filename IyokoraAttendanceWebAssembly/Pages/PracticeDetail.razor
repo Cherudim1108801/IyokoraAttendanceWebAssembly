@@ -183,34 +183,43 @@
                                 <div class="dot" style="background-color:@dot.ColorHex;margin:@dot.Margin;">@dot.SubLabel</div>
                             }
                         </div>
-                        <div style="display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap;">
-                            @if (song.IsFeatured)
-                            {
-                                <span class="badge-star">★</span>
-                            }
-                            @if (song.HasRecordingUrl)
-                            {
-                                <a href="@song.RecordingUrl" target="_blank" rel="noopener noreferrer" style="font-size:13px;color:#512BD4;">🎵 録音を聴く</a>
-                            }
-                            else
-                            {
-                                <span class="hint-text" style="margin:0;">録音リンク未登録</span>
-                            }
 
-                            @if (Profile.Role == Role.Admin)
+                        @if (!song.HasRecordings)
+                        {
+                            <p class="hint-text" style="margin:6px 0 0;">録音リンク未登録</p>
+                        }
+                        else
+                        {
+                            @foreach (var recording in song.Recordings)
                             {
-                                <span style="flex:1;"></span>
-                                @if (song.CanToggleFeaturedOn)
-                                {
-                                    <button class="iyk-btn-text" @onclick="() => ToggleRecordingFeaturedAsync(song)">★ 注目に設定</button>
-                                }
-                                @if (song.CanToggleFeaturedOff)
-                                {
-                                    <button class="iyk-btn-text-star" @onclick="() => ToggleRecordingFeaturedAsync(song)">★ 注目解除</button>
-                                }
-                                <button class="iyk-btn-text" @onclick="() => EditRecordingAsync(song)">編集</button>
+                                <div style="display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap;">
+                                    @if (recording.IsFeatured)
+                                    {
+                                        <span class="badge-star">★</span>
+                                    }
+                                    <a href="@recording.Url" target="_blank" rel="noopener noreferrer" style="font-size:13px;color:#512BD4;">🎵 録音を聴く</a>
+
+                                    @if (Profile.Role == Role.Admin)
+                                    {
+                                        <span style="flex:1;"></span>
+                                        @if (!recording.IsFeatured)
+                                        {
+                                            <button class="iyk-btn-text" @onclick="() => ToggleRecordingFeaturedAsync(song, recording)">★ 注目に設定</button>
+                                        }
+                                        else
+                                        {
+                                            <button class="iyk-btn-text-star" @onclick="() => ToggleRecordingFeaturedAsync(song, recording)">★ 注目解除</button>
+                                        }
+                                        <button class="iyk-btn-text" @onclick="() => EditRecordingAsync(song, recording)">編集</button>
+                                    }
+                                </div>
                             }
-                        </div>
+                        }
+
+                        @if (Profile.Role == Role.Admin)
+                        {
+                            <button class="iyk-btn-text" style="margin-top:4px;" @onclick="() => AddRecordingAsync(song)">＋ 録音を追加</button>
+                        }
                     </div>
                 }
             </div>
@@ -404,8 +413,7 @@
                 PieceId = pieceRef.PieceId,
                 Title = pieceRef.Title,
                 Dots = dots,
-                RecordingUrl = pieceRef.RecordingUrl,
-                IsFeatured = pieceRef.IsFeatured
+                Recordings = pieceRef.Recordings
             });
         }
         _songParticipations = songs;
@@ -431,27 +439,28 @@
         }
     }
 
-    private async Task EditRecordingAsync(SongParticipation song)
+    private async Task AddRecordingAsync(SongParticipation song)
     {
         if (Profile.Role != Role.Admin || _practice is null)
             return;
 
-        var input = await JS.InvokeAsync<string?>("prompt",
-            $"{song.Title} の録音リンク\nOneDriveの共有リンクを入力してください。空欄で保存するとリンクを削除します。",
-            song.RecordingUrl ?? "");
-
+        var input = await JS.InvokeAsync<string?>("prompt", $"{song.Title} の録音リンクを追加\nOneDriveの共有リンクを入力してください。");
         if (input is null)
             return;
 
         var trimmed = input.Trim();
-        if (trimmed.Length > 0 && !Uri.TryCreate(trimmed, UriKind.Absolute, out _))
+        if (trimmed.Length == 0)
+            return;
+
+        if (!Uri.TryCreate(trimmed, UriKind.Absolute, out _))
         {
             _errorMessage = "リンクの形式が正しくありません。";
             return;
         }
 
-        var recordingUrl = trimmed.Length > 0 ? trimmed : null;
-        var updatedPieces = BuildUpdatedPieces(song.PieceId, p => new PracticePieceRef { PieceId = p.PieceId, Title = p.Title, RecordingUrl = recordingUrl, IsFeatured = p.IsFeatured });
+        _errorMessage = null;
+        var newRecording = new PracticeRecording { Id = Guid.NewGuid().ToString("N"), Url = trimmed, IsFeatured = false };
+        var updatedPieces = BuildUpdatedPieces(song.PieceId, p => new PracticePieceRef { PieceId = p.PieceId, Title = p.Title, Recordings = [.. p.Recordings, newRecording] });
         try
         {
             // 対象の曲だけを更新した完全な演奏予定曲一覧を渡すことで、PracticeService 側での
@@ -466,13 +475,58 @@
         }
     }
 
-    private async Task ToggleRecordingFeaturedAsync(SongParticipation song)
+    private async Task EditRecordingAsync(SongParticipation song, PracticeRecording recording)
     {
-        if (Profile.Role != Role.Admin || _practice is null || !song.HasRecordingUrl)
+        if (Profile.Role != Role.Admin || _practice is null)
             return;
 
-        var isFeatured = !song.IsFeatured;
-        var updatedPieces = BuildUpdatedPieces(song.PieceId, p => new PracticePieceRef { PieceId = p.PieceId, Title = p.Title, RecordingUrl = p.RecordingUrl, IsFeatured = isFeatured });
+        var input = await JS.InvokeAsync<string?>("prompt",
+            $"{song.Title} の録音リンク\nOneDriveの共有リンクを入力してください。空欄で保存するとこの録音を削除します。",
+            recording.Url);
+
+        if (input is null)
+            return;
+
+        var trimmed = input.Trim();
+        if (trimmed.Length > 0 && !Uri.TryCreate(trimmed, UriKind.Absolute, out _))
+        {
+            _errorMessage = "リンクの形式が正しくありません。";
+            return;
+        }
+
+        _errorMessage = null;
+        var updatedPieces = BuildUpdatedPieces(song.PieceId, p => new PracticePieceRef
+        {
+            PieceId = p.PieceId,
+            Title = p.Title,
+            Recordings = trimmed.Length == 0
+                ? p.Recordings.Where(r => r.Id != recording.Id).ToList()
+                : p.Recordings.Select(r => r.Id == recording.Id ? new PracticeRecording { Id = r.Id, Url = trimmed, IsFeatured = r.IsFeatured } : r).ToList()
+        });
+        try
+        {
+            await PracticeService.UpdatePiecesAsync(_practice.Id, updatedPieces);
+            _practice.Pieces = updatedPieces;
+            RecomputeDerived();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"録音リンクの保存に失敗しました。({ex.Message})";
+        }
+    }
+
+    private async Task ToggleRecordingFeaturedAsync(SongParticipation song, PracticeRecording recording)
+    {
+        if (Profile.Role != Role.Admin || _practice is null)
+            return;
+
+        var isFeatured = !recording.IsFeatured;
+        var updatedPieces = BuildUpdatedPieces(song.PieceId, p => new PracticePieceRef
+        {
+            PieceId = p.PieceId,
+            Title = p.Title,
+            Recordings = p.Recordings.Select(r => r.Id == recording.Id ? new PracticeRecording { Id = r.Id, Url = r.Url, IsFeatured = isFeatured } : r).ToList()
+        });
         try
         {
             await PracticeService.UpdatePiecesAsync(_practice.Id, updatedPieces);

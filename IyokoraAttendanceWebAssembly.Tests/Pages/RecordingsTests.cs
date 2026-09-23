@@ -28,12 +28,12 @@ public class RecordingsTests : BunitContext
     }
 
     [Fact]
-    public void 録音リンクの無い曲は一覧に表示されない()
+    public void 録音の無い曲は一覧に表示されない()
     {
         var client = RegisterServices();
         client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(-1), pieces:
         [
-            new() { PieceId = "pc1", Title = "録音無し", RecordingUrl = null, IsFeatured = false }
+            new() { PieceId = "pc1", Title = "録音無し" }
         ]));
 
         var cut = Render<Recordings>();
@@ -47,8 +47,8 @@ public class RecordingsTests : BunitContext
         var client = RegisterServices();
         client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(-1), title: "第1回練習", pieces:
         [
-            new() { PieceId = "pc1", Title = "強調曲", RecordingUrl = "https://example.com/a", IsFeatured = true },
-            new() { PieceId = "pc2", Title = "通常曲", RecordingUrl = "https://example.com/b", IsFeatured = false }
+            new() { PieceId = "pc1", Title = "強調曲", Recordings = [Seed.Recording("https://example.com/a", isFeatured: true)] },
+            new() { PieceId = "pc2", Title = "通常曲", Recordings = [Seed.Recording("https://example.com/b")] }
         ]));
 
         var cut = Render<Recordings>();
@@ -62,16 +62,31 @@ public class RecordingsTests : BunitContext
     }
 
     [Fact]
+    public void 同じ曲に複数の録音があると全件一覧に表示される()
+    {
+        var client = RegisterServices();
+        client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(-1), pieces:
+        [
+            new() { PieceId = "pc1", Title = "曲A", Recordings = [Seed.Recording("https://example.com/a"), Seed.Recording("https://example.com/b")] }
+        ]));
+
+        var cut = Render<Recordings>();
+
+        var links = cut.FindAll("a.list-card");
+        Assert.Equal(2, links.Count);
+    }
+
+    [Fact]
     public void 練習日の新しい順に表示される()
     {
         var client = RegisterServices();
         client.Seed("practices", "old", Seed.Practice(DateTime.Today.AddDays(-10), pieces:
         [
-            new() { PieceId = "pc1", Title = "古い曲", RecordingUrl = "https://example.com/old", IsFeatured = false }
+            new() { PieceId = "pc1", Title = "古い曲", Recordings = [Seed.Recording("https://example.com/old")] }
         ]));
         client.Seed("practices", "recent", Seed.Practice(DateTime.Today.AddDays(-1), pieces:
         [
-            new() { PieceId = "pc2", Title = "新しい曲", RecordingUrl = "https://example.com/recent", IsFeatured = false }
+            new() { PieceId = "pc2", Title = "新しい曲", Recordings = [Seed.Recording("https://example.com/recent")] }
         ]));
 
         var cut = Render<Recordings>();

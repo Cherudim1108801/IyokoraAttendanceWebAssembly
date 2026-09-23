@@ -6,9 +6,6 @@ public class PracticePieceRef
     public required string PieceId { get; init; }
     public required string Title { get; init; }
 
-    /// <summary>この練習でのこの曲の録音音源へのリンク（OneDriveなど）。未登録の場合は null。</summary>
-    public string? RecordingUrl { get; init; }
-
-    /// <summary>「音源」タブで強調表示（ピン留め）するかどうか。</summary>
-    public bool IsFeatured { get; init; }
+    /// <summary>この練習でのこの曲の録音音源（OneDriveなどへのリンク）。1曲につき複数件登録できる。</summary>
+    public List<PracticeRecording> Recordings { get; init; } = [];
 }

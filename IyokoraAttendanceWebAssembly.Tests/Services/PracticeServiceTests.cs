@@ -76,58 +76,6 @@ public class PracticeServiceTests
     }
 
     [Fact]
-    public async Task 存在しない練習予定に録音リンクを設定しても保存は行われない()
-    {
-        var (service, repository) = CreateService(byIdResult: null);
-
-        await service.SetPieceRecordingUrlAsync("missing", "piece1", "https://example.com");
-
-        repository.Verify(r => r.UpdatePiecesAsync(It.IsAny<string>(), It.IsAny<IReadOnlyList<PracticePieceRef>>(), It.IsAny<CancellationToken>()), Times.Never);
-    }
-
-    [Fact]
-    public async Task 録音リンクを設定すると対象の曲だけが更新される()
-    {
-        var pieces = new List<PracticePieceRef>
-        {
-            new() { PieceId = "piece1", Title = "曲A" },
-            new() { PieceId = "piece2", Title = "曲B" }
-        };
-        var practice = CreatePractice("practice1", DateTime.Today, pieces);
-        var (service, repository) = CreateService(byIdResult: practice);
-
-        await service.SetPieceRecordingUrlAsync("practice1", "piece1", "https://example.com/rec");
-
-        repository.Verify(r => r.UpdatePiecesAsync(
-            "practice1",
-            It.Is<IReadOnlyList<PracticePieceRef>>(list =>
-                list.First(p => p.PieceId == "piece1").RecordingUrl == "https://example.com/rec" &&
-                list.First(p => p.PieceId == "piece2").RecordingUrl == null),
-            It.IsAny<CancellationToken>()), Times.Once);
-    }
-
-    [Fact]
-    public async Task 録音を強調表示に設定すると対象の曲だけが更新される()
-    {
-        var pieces = new List<PracticePieceRef>
-        {
-            new() { PieceId = "piece1", Title = "曲A" },
-            new() { PieceId = "piece2", Title = "曲B" }
-        };
-        var practice = CreatePractice("practice1", DateTime.Today, pieces);
-        var (service, repository) = CreateService(byIdResult: practice);
-
-        await service.SetPieceRecordingFeaturedAsync("practice1", "piece2", true);
-
-        repository.Verify(r => r.UpdatePiecesAsync(
-            "practice1",
-            It.Is<IReadOnlyList<PracticePieceRef>>(list =>
-                list.First(p => p.PieceId == "piece1").IsFeatured == false &&
-                list.First(p => p.PieceId == "piece2").IsFeatured == true),
-            It.IsAny<CancellationToken>()), Times.Once);
-    }
-
-    [Fact]
     public async Task 鍵を受け取り済みにすると受け取ったメンバー名が渡される()
     {
         var (service, repository) = CreateService();
