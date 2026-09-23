@@ -40,24 +40,34 @@
 
         <div class="section">
             <h3 class="section-title">すべての録音</h3>
-            @foreach (var item in _allRecordings)
+            @foreach (var group in _allRecordings.GroupBy(item => item.Date.Date))
             {
-                <a class="list-card clickable" style="text-decoration:none;color:inherit;" href="@item.RecordingUrl" target="_blank" rel="noopener noreferrer">
-                    <div>
-                        <p class="list-card-title">
-                            @if (item.IsFeatured)
-                            {
-                                <span class="badge-star">★ </span>
-                            }
-                            @item.Title
-                        </p>
-                        @if (!string.IsNullOrEmpty(item.RecordingName))
-                        {
-                            <p class="list-card-sub">@item.RecordingName</p>
-                        }
-                        <p class="list-card-sub">@item.PracticeLabel</p>
-                    </div>
-                </a>
+                var isExpanded = _expandedDates.Contains(group.Key);
+                <button type="button" class="date-group-title" @onclick="() => ToggleGroup(group.Key)">
+                    @(isExpanded ? "▼" : "▶") @group.Key.ToString("yyyy年M月d日")
+                </button>
+                @if (isExpanded)
+                {
+                    @foreach (var item in group)
+                    {
+                        <a class="list-card clickable" style="text-decoration:none;color:inherit;" href="@item.RecordingUrl" target="_blank" rel="noopener noreferrer">
+                            <div>
+                                <p class="list-card-title">
+                                    @if (item.IsFeatured)
+                                    {
+                                        <span class="badge-star">★ </span>
+                                    }
+                                    @item.Title
+                                </p>
+                                @if (!string.IsNullOrEmpty(item.RecordingName))
+                                {
+                                    <p class="list-card-sub">@item.RecordingName</p>
+                                }
+                                <p class="list-card-sub">@item.PracticeLabel</p>
+                            </div>
+                        </a>
+                    }
+                }
             }
         </div>
     }
@@ -66,11 +76,20 @@
 @code {
     private List<RecordingItem> _featuredRecordings = [];
     private List<RecordingItem> _allRecordings = [];
+    private HashSet<DateTime> _expandedDates = [];
     private bool _hasNoRecordings;
     private bool _isBusy;
     private string? _errorMessage;
 
     protected override Task OnInitializedAsync() => LoadAsync();
+
+    private void ToggleGroup(DateTime date)
+    {
+        if (!_expandedDates.Remove(date))
+        {
+            _expandedDates.Add(date);
+        }
+    }
 
     private async Task LoadAsync()
     {
@@ -87,6 +106,7 @@
                     {
                         PracticeId = p.Id,
                         PieceId = piece.PieceId,
+                        Date = p.Date,
                         Title = piece.Title,
                         RecordingName = recording.Name,
                         PracticeLabel = string.IsNullOrEmpty(p.Title)
@@ -100,6 +120,7 @@
             _featuredRecordings = items.Where(i => i.IsFeatured).ToList();
             _allRecordings = items;
             _hasNoRecordings = _allRecordings.Count == 0;
+            _expandedDates = _allRecordings.Count == 0 ? [] : [_allRecordings[0].Date.Date];
         }
         catch (Exception ex)
         {
