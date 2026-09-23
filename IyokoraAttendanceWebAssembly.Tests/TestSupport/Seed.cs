@@ -46,7 +46,7 @@ internal static class Seed
                 ["pieceId"] = p.PieceId,
                 ["title"] = p.Title,
                 ["recordings"] = p.Recordings
-                    .Select(r => new Dictionary<string, object?> { ["id"] = r.Id, ["url"] = r.Url, ["featured"] = r.IsFeatured })
+                    .Select(r => new Dictionary<string, object?> { ["id"] = r.Id, ["name"] = r.Name, ["url"] = r.Url, ["featured"] = r.IsFeatured })
                     .Cast<object?>()
                     .ToList()
             })
@@ -90,9 +90,10 @@ internal static class Seed
     };
 
     /// <summary>テスト用の <see cref="PracticeRecording"/> を組み立てる。IDを省略した場合は毎回異なる値になる。</summary>
-    public static PracticeRecording Recording(string url, bool isFeatured = false, string? id = null) => new()
+    public static PracticeRecording Recording(string url, bool isFeatured = false, string? id = null, string name = "") => new()
     {
         Id = id ?? Guid.NewGuid().ToString("N"),
+        Name = name,
         Url = url,
         IsFeatured = isFeatured
     };

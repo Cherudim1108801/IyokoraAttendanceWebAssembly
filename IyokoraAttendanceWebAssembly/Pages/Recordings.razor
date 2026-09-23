@@ -27,6 +27,10 @@
                     <a class="list-card clickable" style="background:#FFF6E0;text-decoration:none;color:inherit;" href="@item.RecordingUrl" target="_blank" rel="noopener noreferrer">
                         <div>
                             <p class="list-card-title">@item.Title</p>
+                            @if (!string.IsNullOrEmpty(item.RecordingName))
+                            {
+                                <p class="list-card-sub">@item.RecordingName</p>
+                            }
                             <p class="list-card-sub">@item.PracticeLabel</p>
                         </div>
                     </a>
@@ -47,6 +51,10 @@
                             }
                             @item.Title
                         </p>
+                        @if (!string.IsNullOrEmpty(item.RecordingName))
+                        {
+                            <p class="list-card-sub">@item.RecordingName</p>
+                        }
                         <p class="list-card-sub">@item.PracticeLabel</p>
                     </div>
                 </a>
@@ -80,6 +88,7 @@
                         PracticeId = p.Id,
                         PieceId = piece.PieceId,
                         Title = piece.Title,
+                        RecordingName = recording.Name,
                         PracticeLabel = string.IsNullOrEmpty(p.Title)
                             ? $"{p.Date:yyyy年M月d日}の練習"
                             : $"{p.Date:yyyy年M月d日} {p.Title}",

@@ -202,7 +202,9 @@ public class PracticeHistoryTests : BunitContext
         [
             new() { PieceId = "pc1", Title = "曲A" }
         ]));
-        js.Setup(j => j.InvokeAsync<string?>("prompt", It.IsAny<object?[]>())).ReturnsAsync("https://example.com/rec");
+        js.SetupSequence(j => j.InvokeAsync<string?>("prompt", It.IsAny<object?[]>()))
+            .ReturnsAsync("")
+            .ReturnsAsync("https://example.com/rec");
 
         var cut = Render<PracticeHistory>();
         cut.FindAll("button.iyk-btn-text").Single(b => b.TextContent.Contains("音源を管理")).Click();
@@ -214,6 +216,26 @@ public class PracticeHistoryTests : BunitContext
     }
 
     [Fact]
+    public void 録音に名前を付けて追加すると名前が表示される()
+    {
+        var (client, js) = RegisterServices(Role.Admin);
+        client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(-1), pieces:
+        [
+            new() { PieceId = "pc1", Title = "曲A" }
+        ]));
+        js.SetupSequence(j => j.InvokeAsync<string?>("prompt", It.IsAny<object?[]>()))
+            .ReturnsAsync("本番前通し")
+            .ReturnsAsync("https://example.com/rec");
+
+        var cut = Render<PracticeHistory>();
+        cut.FindAll("button.iyk-btn-text").Single(b => b.TextContent.Contains("音源を管理")).Click();
+        cut.FindAll("button.iyk-btn-text").Single(b => b.TextContent.Contains("＋ 録音を追加")).Click();
+
+        Assert.Contains("本番前通し", cut.Markup);
+        Assert.DoesNotContain("録音を聴く", cut.Markup);
+    }
+
+    [Fact]
     public void 不正な形式の録音リンクを入力するとエラーが表示される()
     {
         var (client, js) = RegisterServices(Role.Admin);
@@ -221,7 +243,9 @@ public class PracticeHistoryTests : BunitContext
         [
             new() { PieceId = "pc1", Title = "曲A" }
         ]));
-        js.Setup(j => j.InvokeAsync<string?>("prompt", It.IsAny<object?[]>())).ReturnsAsync("不正なリンク");
+        js.SetupSequence(j => j.InvokeAsync<string?>("prompt", It.IsAny<object?[]>()))
+            .ReturnsAsync("")
+            .ReturnsAsync("不正なリンク");
 
         var cut = Render<PracticeHistory>();
         cut.FindAll("button.iyk-btn-text").Single(b => b.TextContent.Contains("音源を管理")).Click();

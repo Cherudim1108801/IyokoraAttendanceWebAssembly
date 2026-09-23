@@ -9,6 +9,9 @@ public class RecordingItem
     /// <summary>曲名。</summary>
     public required string Title { get; init; }
 
+    /// <summary>録音を管理しやすくするための名前（任意）。未設定の場合は空文字列。</summary>
+    public string RecordingName { get; init; } = string.Empty;
+
     /// <summary>この録音が行われた練習の日付を含む表示用ラベル。</summary>
     public required string PracticeLabel { get; init; }
 
