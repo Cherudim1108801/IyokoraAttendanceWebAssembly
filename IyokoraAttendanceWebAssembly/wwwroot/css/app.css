@@ -148,6 +148,20 @@ html, body {
     margin: 0;
 }
 
+/* Update-available banner (new build deployed while the tab was open) */
+
+.update-banner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: #FFF6E0;
+    border-bottom: 1px solid #F0D98C;
+    font-size: 13px;
+    text-align: center;
+}
+
 /* Highlighted top card (next practice / add panel) */
 
 .highlight-card {

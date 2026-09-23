@@ -54,6 +54,7 @@ public class ServiceCollectionExtensionsTests
     [InlineData(typeof(PieceService))]
     [InlineData(typeof(ScheduleCandidateService))]
     [InlineData(typeof(ScheduleVoteService))]
+    [InlineData(typeof(AppUpdateWatcher))]
     public void アプリで使用する各サービスが解決できる(Type serviceType)
     {
         var provider = BuildProvider();
