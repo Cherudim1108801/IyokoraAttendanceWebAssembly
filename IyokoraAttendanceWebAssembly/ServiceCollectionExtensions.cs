@@ -21,6 +21,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped(sp => (IJSInProcessRuntime)sp.GetRequiredService<IJSRuntime>());
         services.AddScoped<IFirestoreClient, FirestoreClient>();
         services.AddScoped<IAppCheckTokenProvider, AppCheckTokenProvider>();
+        services.AddScoped<IBootManifestFetcher, BootManifestFetcher>();
+        services.AddScoped<AppUpdateWatcher>();
         services.AddScoped<NameCipher>();
         services.AddScoped<LocalProfileStore>();
 

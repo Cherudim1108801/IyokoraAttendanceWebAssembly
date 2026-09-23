@@ -1,9 +1,18 @@
 @inherits LayoutComponentBase
 @inject NavigationManager Nav
 @inject LocalProfileStore Profile
+@inject AppUpdateWatcher UpdateWatcher
 @implements IDisposable
 
 <div class="app-shell">
+    @if (UpdateWatcher.IsUpdateAvailable)
+    {
+        <div class="update-banner">
+            <span>新しいバージョンがあります。</span>
+            <button class="iyk-btn-text-primary" @onclick="Reload">今すぐ更新</button>
+        </div>
+    }
+
     @if (_showNav)
     {
         <HamburgerMenu />
@@ -20,10 +29,20 @@
     protected override void OnInitialized()
     {
         Nav.LocationChanged += OnLocationChanged;
+        UpdateWatcher.UpdateAvailable += OnUpdateAvailable;
         CheckRegistration();
+        _ = UpdateWatcher.CaptureCurrentVersionAsync();
     }
 
-    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) => CheckRegistration();
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        CheckRegistration();
+        _ = UpdateWatcher.CheckForUpdateAsync();
+    }
+
+    private void OnUpdateAvailable() => InvokeAsync(StateHasChanged);
+
+    private void Reload() => Nav.NavigateTo(Nav.Uri, forceLoad: true);
 
     private void CheckRegistration()
     {
@@ -43,5 +62,9 @@
         StateHasChanged();
     }
 
-    public void Dispose() => Nav.LocationChanged -= OnLocationChanged;
+    public void Dispose()
+    {
+        Nav.LocationChanged -= OnLocationChanged;
+        UpdateWatcher.UpdateAvailable -= OnUpdateAvailable;
+    }
 }
