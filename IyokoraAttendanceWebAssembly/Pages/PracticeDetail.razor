@@ -197,7 +197,7 @@
                                     {
                                         <span class="badge-star">★</span>
                                     }
-                                    <a href="@recording.Url" target="_blank" rel="noopener noreferrer" style="font-size:13px;color:#512BD4;">🎵 録音を聴く</a>
+                                    <a href="@recording.Url" target="_blank" rel="noopener noreferrer" style="font-size:13px;color:#512BD4;">🎵 @recording.DisplayName</a>
 
                                     @if (Profile.Role == Role.Admin)
                                     {
@@ -444,22 +444,26 @@
         if (Profile.Role != Role.Admin || _practice is null)
             return;
 
-        var input = await JS.InvokeAsync<string?>("prompt", $"{song.Title} の録音リンクを追加\nOneDriveの共有リンクを入力してください。");
-        if (input is null)
+        var nameInput = await JS.InvokeAsync<string?>("prompt", $"{song.Title} に追加する音源の名前\n管理しやすい名前を入力してください（例：本番前通し）。空欄でも登録できます。");
+        if (nameInput is null)
             return;
 
-        var trimmed = input.Trim();
-        if (trimmed.Length == 0)
+        var urlInput = await JS.InvokeAsync<string?>("prompt", $"{song.Title} の録音リンク\nOneDriveの共有リンクを入力してください。");
+        if (urlInput is null)
             return;
 
-        if (!Uri.TryCreate(trimmed, UriKind.Absolute, out _))
+        var trimmedUrl = urlInput.Trim();
+        if (trimmedUrl.Length == 0)
+            return;
+
+        if (!Uri.TryCreate(trimmedUrl, UriKind.Absolute, out _))
         {
             _errorMessage = "リンクの形式が正しくありません。";
             return;
         }
 
         _errorMessage = null;
-        var newRecording = new PracticeRecording { Id = Guid.NewGuid().ToString("N"), Url = trimmed, IsFeatured = false };
+        var newRecording = new PracticeRecording { Id = Guid.NewGuid().ToString("N"), Name = nameInput.Trim(), Url = trimmedUrl, IsFeatured = false };
         var updatedPieces = BuildUpdatedPieces(song.PieceId, p => new PracticePieceRef { PieceId = p.PieceId, Title = p.Title, Recordings = [.. p.Recordings, newRecording] });
         try
         {
@@ -480,28 +484,33 @@
         if (Profile.Role != Role.Admin || _practice is null)
             return;
 
-        var input = await JS.InvokeAsync<string?>("prompt",
+        var nameInput = await JS.InvokeAsync<string?>("prompt", $"{song.Title} の音源名\n管理しやすい名前を入力してください。", recording.Name);
+        if (nameInput is null)
+            return;
+
+        var urlInput = await JS.InvokeAsync<string?>("prompt",
             $"{song.Title} の録音リンク\nOneDriveの共有リンクを入力してください。空欄で保存するとこの録音を削除します。",
             recording.Url);
 
-        if (input is null)
+        if (urlInput is null)
             return;
 
-        var trimmed = input.Trim();
-        if (trimmed.Length > 0 && !Uri.TryCreate(trimmed, UriKind.Absolute, out _))
+        var trimmedUrl = urlInput.Trim();
+        if (trimmedUrl.Length > 0 && !Uri.TryCreate(trimmedUrl, UriKind.Absolute, out _))
         {
             _errorMessage = "リンクの形式が正しくありません。";
             return;
         }
 
         _errorMessage = null;
+        var trimmedName = nameInput.Trim();
         var updatedPieces = BuildUpdatedPieces(song.PieceId, p => new PracticePieceRef
         {
             PieceId = p.PieceId,
             Title = p.Title,
-            Recordings = trimmed.Length == 0
+            Recordings = trimmedUrl.Length == 0
                 ? p.Recordings.Where(r => r.Id != recording.Id).ToList()
-                : p.Recordings.Select(r => r.Id == recording.Id ? new PracticeRecording { Id = r.Id, Url = trimmed, IsFeatured = r.IsFeatured } : r).ToList()
+                : p.Recordings.Select(r => r.Id == recording.Id ? new PracticeRecording { Id = r.Id, Name = trimmedName, Url = trimmedUrl, IsFeatured = r.IsFeatured } : r).ToList()
         });
         try
         {
@@ -525,7 +534,7 @@
         {
             PieceId = p.PieceId,
             Title = p.Title,
-            Recordings = p.Recordings.Select(r => r.Id == recording.Id ? new PracticeRecording { Id = r.Id, Url = r.Url, IsFeatured = isFeatured } : r).ToList()
+            Recordings = p.Recordings.Select(r => r.Id == recording.Id ? new PracticeRecording { Id = r.Id, Name = r.Name, Url = r.Url, IsFeatured = isFeatured } : r).ToList()
         });
         try
         {

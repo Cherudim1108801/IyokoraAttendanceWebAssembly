@@ -113,6 +113,7 @@ public class PracticeRepository(IFirestoreClient client) : IPracticeRepository
         .Select(r => new Dictionary<string, object?>
         {
             ["id"] = r.Id,
+            ["name"] = r.Name,
             ["url"] = r.Url,
             ["featured"] = r.IsFeatured
         })
@@ -168,6 +169,7 @@ public class PracticeRepository(IFirestoreClient client) : IPracticeRepository
     private static PracticeRecording ToRecording(Dictionary<string, object?> fields) => new()
     {
         Id = fields.GetValueOrDefault("id") as string ?? string.Empty,
+        Name = fields.GetValueOrDefault("name") as string ?? string.Empty,
         Url = fields.GetValueOrDefault("url") as string ?? string.Empty,
         IsFeatured = fields.GetValueOrDefault("featured") as bool? ?? false
     };

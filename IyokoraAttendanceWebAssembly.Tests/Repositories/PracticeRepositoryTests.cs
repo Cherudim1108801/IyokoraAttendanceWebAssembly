@@ -252,6 +252,48 @@ public class PracticeRepositoryTests
     }
 
     [Fact]
+    public async Task 演奏予定曲を更新すると録音の名前も保存される()
+    {
+        var (repository, client) = CreateRepository();
+        var pieces = new List<PracticePieceRef>
+        {
+            new() { PieceId = "piece1", Title = "曲A", Recordings = [new() { Id = "rec1", Name = "本番前通し", Url = "https://example.com", IsFeatured = false }] }
+        };
+
+        await repository.UpdatePiecesAsync("practice1", pieces);
+
+        client.Verify(c => c.UpsertDocumentAsync(
+            "practices",
+            "practice1",
+            It.Is<Dictionary<string, object?>>(f => GetRecordings(f, "piece1").Single()["name"] as string == "本番前通し"),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task 保存した録音の名前を読み込み時に復元できる()
+    {
+        var pieces = new List<object?>
+        {
+            new Dictionary<string, object?>
+            {
+                ["pieceId"] = "piece1",
+                ["title"] = "曲A",
+                ["recordings"] = new List<object?>
+                {
+                    new Dictionary<string, object?> { ["id"] = "rec1", ["name"] = "本番前通し", ["url"] = "https://example.com", ["featured"] = false }
+                }
+            }
+        };
+        var doc = CreatePracticeDoc("p1", DateTime.Today, groupId: FirebaseOptions.GroupId, pieces: pieces);
+        var (repository, _) = CreateRepository([doc]);
+
+        var practices = await repository.GetAllAsync();
+
+        var recording = Assert.Single(Assert.Single(practices).Pieces.Single().Recordings);
+        Assert.Equal("本番前通し", recording.Name);
+    }
+
+    [Fact]
     public async Task 旧形式の録音URLは読み込み時に録音1件として移行される()
     {
         var pieces = new List<object?>

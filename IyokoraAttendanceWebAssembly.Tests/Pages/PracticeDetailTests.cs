@@ -226,7 +226,9 @@ public class PracticeDetailTests : BunitContext
         [
             new() { PieceId = "pc1", Title = "曲A" }
         ]));
-        js.Setup(j => j.InvokeAsync<string?>("prompt", It.IsAny<object?[]>())).ReturnsAsync("https://example.com/rec");
+        js.SetupSequence(j => j.InvokeAsync<string?>("prompt", It.IsAny<object?[]>()))
+            .ReturnsAsync("")
+            .ReturnsAsync("https://example.com/rec");
 
         var cut = Render();
         // [0]=タイムスケジュール編集 [1]=演奏予定曲編集 [2]=＋ 録音を追加(録音未登録のため他のボタンは無い)
@@ -237,6 +239,25 @@ public class PracticeDetailTests : BunitContext
     }
 
     [Fact]
+    public void 録音に名前を付けて追加すると名前が表示される()
+    {
+        var (client, _, js) = RegisterServices(Role.Admin);
+        client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3), pieces:
+        [
+            new() { PieceId = "pc1", Title = "曲A" }
+        ]));
+        js.SetupSequence(j => j.InvokeAsync<string?>("prompt", It.IsAny<object?[]>()))
+            .ReturnsAsync("本番前通し")
+            .ReturnsAsync("https://example.com/rec");
+
+        var cut = Render();
+        cut.FindAll("button.iyk-btn-text")[2].Click();
+
+        Assert.Contains("本番前通し", cut.Markup);
+        Assert.DoesNotContain("録音を聴く", cut.Markup);
+    }
+
+    [Fact]
     public void 録音リンクを追加しても各コレクションの再取得は発生しない()
     {
         var (client, _, js) = RegisterServices(Role.Admin);
@@ -244,7 +265,9 @@ public class PracticeDetailTests : BunitContext
         [
             new() { PieceId = "pc1", Title = "曲A" }
         ]));
-        js.Setup(j => j.InvokeAsync<string?>("prompt", It.IsAny<object?[]>())).ReturnsAsync("https://example.com/rec");
+        js.SetupSequence(j => j.InvokeAsync<string?>("prompt", It.IsAny<object?[]>()))
+            .ReturnsAsync("")
+            .ReturnsAsync("https://example.com/rec");
 
         var cut = Render();
         var callsAfterLoad = client.Calls.Count;
@@ -261,7 +284,9 @@ public class PracticeDetailTests : BunitContext
         [
             new() { PieceId = "pc1", Title = "曲A" }
         ]));
-        js.Setup(j => j.InvokeAsync<string?>("prompt", It.IsAny<object?[]>())).ReturnsAsync("不正なリンク");
+        js.SetupSequence(j => j.InvokeAsync<string?>("prompt", It.IsAny<object?[]>()))
+            .ReturnsAsync("")
+            .ReturnsAsync("不正なリンク");
 
         var cut = Render();
         cut.FindAll("button.iyk-btn-text")[2].Click();
@@ -277,7 +302,9 @@ public class PracticeDetailTests : BunitContext
         [
             new() { PieceId = "pc1", Title = "曲A", Recordings = [new() { Id = "r1", Url = "https://example.com/rec1", IsFeatured = false }] }
         ]));
-        js.Setup(j => j.InvokeAsync<string?>("prompt", It.IsAny<object?[]>())).ReturnsAsync("https://example.com/rec2");
+        js.SetupSequence(j => j.InvokeAsync<string?>("prompt", It.IsAny<object?[]>()))
+            .ReturnsAsync("")
+            .ReturnsAsync("https://example.com/rec2");
 
         var cut = Render();
         // [0]=タイムスケジュール編集 [1]=演奏予定曲編集 [2]=★注目に設定 [3]=編集 [4]=＋録音を追加

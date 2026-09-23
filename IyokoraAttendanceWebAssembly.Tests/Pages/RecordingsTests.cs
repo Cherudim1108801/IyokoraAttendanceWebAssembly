@@ -77,6 +77,20 @@ public class RecordingsTests : BunitContext
     }
 
     [Fact]
+    public void 名前が付いた録音はその名前が表示される()
+    {
+        var client = RegisterServices();
+        client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(-1), pieces:
+        [
+            new() { PieceId = "pc1", Title = "曲A", Recordings = [Seed.Recording("https://example.com/a", name: "本番前通し")] }
+        ]));
+
+        var cut = Render<Recordings>();
+
+        Assert.Contains("本番前通し", cut.Markup);
+    }
+
+    [Fact]
     public void 練習日の新しい順に表示される()
     {
         var client = RegisterServices();
