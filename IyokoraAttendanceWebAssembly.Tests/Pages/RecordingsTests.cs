@@ -104,6 +104,7 @@ public class RecordingsTests : BunitContext
         ]));
 
         var cut = Render<Recordings>();
+        cut.FindAll("button.date-group-title")[1].Click(); // 過去の日付グループを展開する
 
         var titles = cut.FindAll("p.list-card-title").Select(e => e.TextContent).ToList();
         Assert.Equal(["新しい曲", "古い曲"], titles);
@@ -124,16 +125,64 @@ public class RecordingsTests : BunitContext
         ]));
 
         var cut = Render<Recordings>();
+        cut.FindAll("button.date-group-title")[1].Click(); // 過去の日付グループを展開する
 
-        var groupTitles = cut.FindAll("p.date-group-title").Select(e => e.TextContent).ToList();
-        Assert.Equal(
-        [
-            DateTime.Today.AddDays(-1).ToString("yyyy年M月d日"),
-            DateTime.Today.AddDays(-10).ToString("yyyy年M月d日")
-        ], groupTitles);
+        var groupTitles = cut.FindAll("button.date-group-title").Select(e => e.TextContent.Trim()).ToList();
+        Assert.Contains(DateTime.Today.AddDays(-1).ToString("yyyy年M月d日"), groupTitles[0]);
+        Assert.Contains(DateTime.Today.AddDays(-10).ToString("yyyy年M月d日"), groupTitles[1]);
 
         var titles = cut.FindAll("p.list-card-title").Select(e => e.TextContent).ToList();
         Assert.Equal(["新しい曲", "古い曲1", "古い曲2"], titles);
+    }
+
+    [Fact]
+    public void デフォルトでは最新の日付のみ展開され過去の日付は格納された状態で表示される()
+    {
+        var client = RegisterServices();
+        client.Seed("practices", "old", Seed.Practice(DateTime.Today.AddDays(-10), pieces:
+        [
+            new() { PieceId = "pc1", Title = "古い曲", Recordings = [Seed.Recording("https://example.com/old")] }
+        ]));
+        client.Seed("practices", "recent", Seed.Practice(DateTime.Today.AddDays(-1), pieces:
+        [
+            new() { PieceId = "pc2", Title = "新しい曲", Recordings = [Seed.Recording("https://example.com/recent")] }
+        ]));
+
+        var cut = Render<Recordings>();
+
+        var groupTitles = cut.FindAll("button.date-group-title").Select(e => e.TextContent.Trim()).ToList();
+        Assert.StartsWith("▼", groupTitles[0]);
+        Assert.StartsWith("▶", groupTitles[1]);
+
+        var titles = cut.FindAll("p.list-card-title").Select(e => e.TextContent).ToList();
+        Assert.Equal(["新しい曲"], titles);
+    }
+
+    [Fact]
+    public void 格納されている日付グループは見出しクリックで展開できる()
+    {
+        var client = RegisterServices();
+        client.Seed("practices", "old", Seed.Practice(DateTime.Today.AddDays(-10), pieces:
+        [
+            new() { PieceId = "pc1", Title = "古い曲", Recordings = [Seed.Recording("https://example.com/old")] }
+        ]));
+        client.Seed("practices", "recent", Seed.Practice(DateTime.Today.AddDays(-1), pieces:
+        [
+            new() { PieceId = "pc2", Title = "新しい曲", Recordings = [Seed.Recording("https://example.com/recent")] }
+        ]));
+
+        var cut = Render<Recordings>();
+        cut.FindAll("button.date-group-title")[1].Click();
+
+        Assert.StartsWith("▼", cut.FindAll("button.date-group-title")[1].TextContent.Trim());
+        var titles = cut.FindAll("p.list-card-title").Select(e => e.TextContent).ToList();
+        Assert.Equal(["新しい曲", "古い曲"], titles);
+
+        cut.FindAll("button.date-group-title")[1].Click();
+
+        Assert.StartsWith("▶", cut.FindAll("button.date-group-title")[1].TextContent.Trim());
+        titles = cut.FindAll("p.list-card-title").Select(e => e.TextContent).ToList();
+        Assert.Equal(["新しい曲"], titles);
     }
 
     [Fact]

@@ -19,6 +19,17 @@ html, body {
     margin: 0 0 6px;
 }
 
+button.date-group-title {
+    display: block;
+    width: 100%;
+    background: none;
+    border: none;
+    padding: 0;
+    text-align: left;
+    cursor: pointer;
+    font-family: inherit;
+}
+
 .date-group-title {
     font-size: 13px;
     font-weight: bold;
