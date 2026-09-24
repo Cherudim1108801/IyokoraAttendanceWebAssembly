@@ -21,9 +21,29 @@
             {
                 <p class="hint-text">🕒 @_practice.TimeRangeSummary</p>
             }
-            @if (!string.IsNullOrEmpty(_practice.Place))
+            @if (!string.IsNullOrEmpty(_practice.Place) || Profile.Role == Role.Admin)
             {
-                <p class="hint-text">📍 @_practice.Place</p>
+                <div style="display:flex;align-items:center;justify-content:space-between;">
+                    <p class="hint-text" style="margin:4px 0;">📍 @(string.IsNullOrEmpty(_practice.Place) ? "未設定" : _practice.Place)</p>
+                    @if (Profile.Role == Role.Admin && !_isPlaceEditPanelVisible)
+                    {
+                        <button class="iyk-btn-text" @onclick="OpenPlaceEditPanel">編集</button>
+                    }
+                </div>
+            }
+
+            @if (_isPlaceEditPanelVisible)
+            {
+                <div class="highlight-card" style="margin-top:6px;">
+                    <div class="field">
+                        <label>練習場所（任意）</label>
+                        <input type="text" placeholder="例：市民会館 音楽室" @bind="_editPlace" @bind:event="oninput" />
+                    </div>
+                    <div style="display:flex;gap:8px;margin-top:8px;">
+                        <button class="iyk-btn iyk-btn-primary" style="flex:1;" @onclick="SavePlaceAsync">保存</button>
+                        <button class="iyk-btn" style="flex:1;" @onclick="ClosePlaceEditPanel">キャンセル</button>
+                    </div>
+                </div>
             }
             @if (!string.IsNullOrEmpty(_practice.PiecesSummary))
             {
@@ -270,6 +290,20 @@
     }
 </div>
 
+@if (_isKeyPickupConfirmVisible)
+{
+    <div class="iyk-modal-backdrop" @onclick="CancelKeyPickupConfirm">
+        <div class="iyk-modal-panel" @onclick:stopPropagation="true">
+            <div class="iyk-modal-title">鍵の受け取りが必要ですか？</div>
+            <p class="iyk-modal-sub">練習場所の変更に伴い、鍵の受け取りの要否を確認してください。</p>
+            <div style="display:flex;gap:8px;margin-top:16px;">
+                <button class="iyk-btn iyk-btn-primary" style="flex:1;" @onclick="() => ConfirmKeyPickupRequirementAsync(true)">必要</button>
+                <button class="iyk-btn" style="flex:1;" @onclick="() => ConfirmKeyPickupRequirementAsync(false)">不要</button>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     [Parameter]
     public string PracticeId { get; set; } = string.Empty;
@@ -288,6 +322,11 @@
     private TimeOnly? _editStartTime;
     private TimeOnly? _editEndTime;
     private List<TimelineItemInput> _editTimelineItems = [];
+
+    private bool _isPlaceEditPanelVisible;
+    private string _editPlace = string.Empty;
+    private bool _isKeyPickupConfirmVisible;
+    private string? _pendingPlace;
 
     private List<Piece> _pieces = [];
     private List<Member> _members = [];
@@ -617,6 +656,67 @@
         catch (Exception ex)
         {
             _errorMessage = $"タイムスケジュールの保存に失敗しました。({ex.Message})";
+        }
+    }
+
+    private void OpenPlaceEditPanel()
+    {
+        if (_practice is null)
+            return;
+
+        _editPlace = _practice.Place;
+        _isPlaceEditPanelVisible = true;
+    }
+
+    private void ClosePlaceEditPanel() => _isPlaceEditPanelVisible = false;
+
+    private void SavePlaceAsync()
+    {
+        if (Profile.Role != Role.Admin || _practice is null)
+            return;
+
+        _errorMessage = null;
+
+        var newPlace = _editPlace.Trim();
+        if (newPlace == _practice.Place)
+        {
+            _isPlaceEditPanelVisible = false;
+            return;
+        }
+
+        // 場所が変わると必要な鍵も変わりうるため、都度受け取りの要否を確認し直し、受け取り状況は未受け取りに戻す。
+        _pendingPlace = newPlace;
+        _isKeyPickupConfirmVisible = true;
+    }
+
+    private void CancelKeyPickupConfirm()
+    {
+        _pendingPlace = null;
+        _isKeyPickupConfirmVisible = false;
+    }
+
+    private async Task ConfirmKeyPickupRequirementAsync(bool requiresKeyPickup)
+    {
+        if (Profile.Role != Role.Admin || _practice is null || _pendingPlace is null)
+            return;
+
+        var newPlace = _pendingPlace;
+        _pendingPlace = null;
+        _isKeyPickupConfirmVisible = false;
+
+        try
+        {
+            await PracticeService.UpdatePlaceAsync(_practice.Id, newPlace, requiresKeyPickup);
+
+            _practice.Place = newPlace;
+            _practice.RequiresKeyPickup = requiresKeyPickup;
+            _practice.KeyPickedUp = false;
+            _practice.KeyPickedUpByName = string.Empty;
+            _isPlaceEditPanelVisible = false;
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"練習場所の保存に失敗しました。({ex.Message})";
         }
     }
 

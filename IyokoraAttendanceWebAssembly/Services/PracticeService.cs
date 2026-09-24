@@ -75,6 +75,17 @@ public class PracticeService(IPracticeRepository repository)
     public Task UpdatePiecesAsync(string practiceId, IReadOnlyList<PracticePieceRef> pieces, CancellationToken ct = default) =>
         repository.UpdatePiecesAsync(practiceId, pieces, ct);
 
+    /// <summary>
+    /// 練習予定の場所を更新する。場所の変更に伴い鍵の受け取りが必要かどうかを設定し直し、
+    /// 鍵の受け取り状況は未受け取りにリセットする（受け取ったメンバーの記録もクリアする）。
+    /// </summary>
+    /// <param name="practiceId">練習予定ID。</param>
+    /// <param name="place">場所（任意）。</param>
+    /// <param name="requiresKeyPickup">鍵の受け取りが必要かどうか。</param>
+    /// <param name="ct">キャンセルトークン。</param>
+    public Task UpdatePlaceAsync(string practiceId, string place, bool requiresKeyPickup, CancellationToken ct = default) =>
+        repository.UpdatePlaceAsync(practiceId, place, requiresKeyPickup, ct);
+
     /// <summary>指定IDの練習予定を削除する。</summary>
     /// <param name="practiceId">練習予定ID。</param>
     /// <param name="ct">キャンセルトークン。</param>

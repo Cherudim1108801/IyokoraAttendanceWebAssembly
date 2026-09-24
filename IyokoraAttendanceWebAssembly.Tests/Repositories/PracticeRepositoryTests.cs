@@ -209,6 +209,42 @@ public class PracticeRepositoryTests
     }
 
     [Fact]
+    public async Task 練習場所を更新すると場所と鍵の受け取り要否が保存され受け取り状況は未受け取りに戻される()
+    {
+        var (repository, client) = CreateRepository();
+
+        await repository.UpdatePlaceAsync("practice1", "第二音楽室", requiresKeyPickup: true);
+
+        client.Verify(c => c.UpsertDocumentAsync(
+            "practices",
+            "practice1",
+            It.Is<Dictionary<string, object?>>(f =>
+                (string)f["place"]! == "第二音楽室" &&
+                (bool)f["requiresKeyPickup"]! == true &&
+                (bool)f["keyPickedUp"]! == false &&
+                f["keyPickedUpByName"] == null),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task 練習場所の更新で鍵の受け取りが不要と回答すると受け取り不要として保存される()
+    {
+        var (repository, client) = CreateRepository();
+
+        await repository.UpdatePlaceAsync("practice1", "市民会館", requiresKeyPickup: false);
+
+        client.Verify(c => c.UpsertDocumentAsync(
+            "practices",
+            "practice1",
+            It.Is<Dictionary<string, object?>>(f =>
+                (string)f["place"]! == "市民会館" &&
+                (bool)f["requiresKeyPickup"]! == false &&
+                (bool)f["keyPickedUp"]! == false &&
+                f["keyPickedUpByName"] == null),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
     public async Task 演奏予定曲を更新すると指定した曲一覧で保存される()
     {
         var (repository, client) = CreateRepository();

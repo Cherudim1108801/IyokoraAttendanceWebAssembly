@@ -141,13 +141,142 @@ public class PracticeDetailTests : BunitContext
     }
 
     [Fact]
+    public void 管理者が練習場所を変更すると鍵の受け取りが必要かどうかを確認するポップアップが表示される()
+    {
+        var (client, _, _) = RegisterServices(Role.Admin);
+        client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3), place: "市民会館"));
+
+        var cut = Render();
+        cut.FindAll("button.iyk-btn-text")[0].Click();
+        cut.Find("input[type=text]").Input("第二音楽室");
+        cut.Find("button.iyk-btn-primary").Click();
+
+        Assert.Contains("鍵の受け取りが必要ですか？", cut.Markup);
+        var modal = cut.Find("div.iyk-modal-panel");
+        var buttonLabels = modal.QuerySelectorAll("button").Select(b => b.TextContent).ToList();
+        Assert.Equal(["必要", "不要"], buttonLabels);
+    }
+
+    [Fact]
+    public void 確認ポップアップで必要を選ぶと鍵の受け取りが必要として保存される()
+    {
+        var (client, _, _) = RegisterServices(Role.Admin);
+        client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3), place: "市民会館"));
+
+        var cut = Render();
+        cut.FindAll("button.iyk-btn-text")[0].Click();
+        cut.Find("input[type=text]").Input("第二音楽室");
+        cut.Find("button.iyk-btn-primary").Click();
+        cut.Find("div.iyk-modal-panel").QuerySelector("button.iyk-btn-primary")!.Click();
+
+        Assert.Contains("📍 第二音楽室", cut.Markup);
+        Assert.Contains("未受け取り", cut.Markup);
+        Assert.Empty(cut.FindAll("div.iyk-modal-backdrop"));
+    }
+
+    [Fact]
+    public void 確認ポップアップで不要を選ぶと鍵の受け取りが不要として保存される()
+    {
+        var (client, _, _) = RegisterServices(Role.Admin);
+        client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3), place: "市民会館"));
+
+        var cut = Render();
+        cut.FindAll("button.iyk-btn-text")[0].Click();
+        cut.Find("input[type=text]").Input("第二音楽室");
+        cut.Find("button.iyk-btn-primary").Click();
+        var modal = cut.Find("div.iyk-modal-panel");
+        modal.QuerySelectorAll("button").Single(b => b.TextContent == "不要").Click();
+
+        Assert.Contains("📍 第二音楽室", cut.Markup);
+        Assert.Contains("この練習では鍵の受け取りは不要です", cut.Markup);
+    }
+
+    [Fact]
+    public void 鍵受け取り済みの練習の場所を変更し確認ポップアップで必要を選ぶと未受け取りに戻る()
+    {
+        var (client, _, _) = RegisterServices(Role.Admin);
+        client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3), place: "市民会館", requiresKeyPickup: true, keyPickedUp: true, keyPickedUpByName: "山田 太郎"));
+
+        var cut = Render();
+        cut.FindAll("button.iyk-btn-text")[0].Click();
+        cut.Find("input[type=text]").Input("第二音楽室");
+        cut.Find("button.iyk-btn-primary").Click();
+        cut.Find("div.iyk-modal-panel").QuerySelector("button.iyk-btn-primary")!.Click();
+
+        Assert.Contains("📍 第二音楽室", cut.Markup);
+        Assert.Contains("未受け取り", cut.Markup);
+        Assert.DoesNotContain("山田 太郎", cut.Markup);
+    }
+
+    [Fact]
+    public void 確認ポップアップの背景をクリックすると保存されずに閉じる()
+    {
+        var (client, _, _) = RegisterServices(Role.Admin);
+        client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3), place: "市民会館"));
+
+        var cut = Render();
+        cut.FindAll("button.iyk-btn-text")[0].Click();
+        cut.Find("input[type=text]").Input("第二音楽室");
+        cut.Find("button.iyk-btn-primary").Click();
+        cut.Find("div.iyk-modal-backdrop").Click();
+
+        Assert.Empty(cut.FindAll("div.iyk-modal-backdrop"));
+        Assert.Contains("📍 市民会館", cut.Markup);
+    }
+
+    [Fact]
+    public void 練習場所を変更せずに保存すると確認ポップアップは表示されず状況も変わらない()
+    {
+        var (client, _, _) = RegisterServices(Role.Admin);
+        client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3), place: "市民会館", requiresKeyPickup: true, keyPickedUp: true, keyPickedUpByName: "山田 太郎"));
+
+        var cut = Render();
+        cut.FindAll("button.iyk-btn-text")[0].Click();
+        cut.Find("input[type=text]").Input("市民会館");
+        cut.Find("button.iyk-btn-primary").Click();
+
+        Assert.Empty(cut.FindAll("div.iyk-modal-backdrop"));
+        Assert.Contains("受け取り済み", cut.Markup);
+        Assert.Contains("山田 太郎", cut.Markup);
+    }
+
+    [Fact]
+    public void 一般団員には練習場所の編集ボタンが表示されない()
+    {
+        var (client, _, _) = RegisterServices(Role.GeneralMember);
+        client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3), place: "市民会館"));
+
+        var cut = Render();
+
+        Assert.Contains("📍 市民会館", cut.Markup);
+        Assert.Empty(cut.FindAll("button.iyk-btn-text"));
+    }
+
+    [Fact]
+    public void 練習場所の保存に失敗した場合はエラーメッセージが表示される()
+    {
+        var (client, _, _) = RegisterServices(Role.Admin);
+        client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3), place: "市民会館"));
+        client.FailNextCall("Upsert", "practices");
+
+        var cut = Render();
+        cut.FindAll("button.iyk-btn-text")[0].Click();
+        cut.Find("input[type=text]").Input("第二音楽室");
+        cut.Find("button.iyk-btn-primary").Click();
+        cut.Find("div.iyk-modal-panel").QuerySelector("button.iyk-btn-primary")!.Click();
+
+        Assert.Contains("練習場所の保存に失敗しました", cut.Find("p.error-text").TextContent);
+    }
+
+    [Fact]
     public void 管理者がタイムスケジュールを編集して保存すると一覧に反映される()
     {
         var (client, _, _) = RegisterServices(Role.Admin);
         client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3)));
 
         var cut = Render();
-        cut.Find("button.iyk-btn-text").Click();
+        // [0]=場所編集 [1]=タイムスケジュール編集
+        cut.FindAll("button.iyk-btn-text")[1].Click();
         cut.FindAll("input[type=time]")[0].Input("10:00:00");
         cut.FindAll("input[type=time]")[1].Input("12:00:00");
         cut.Find("button.iyk-btn-primary").Click();
@@ -162,7 +291,8 @@ public class PracticeDetailTests : BunitContext
         client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3)));
 
         var cut = Render();
-        cut.Find("button.iyk-btn-text").Click();
+        // [0]=場所編集 [1]=タイムスケジュール編集
+        cut.FindAll("button.iyk-btn-text")[1].Click();
         cut.FindAll("input[type=time]")[0].Input("10:00:00");
         cut.FindAll("input[type=time]")[1].Input("12:00:00");
         var callsAfterLoad = client.Calls.Count;
@@ -178,7 +308,8 @@ public class PracticeDetailTests : BunitContext
         client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3)));
 
         var cut = Render();
-        cut.Find("button.iyk-btn-text").Click();
+        // [0]=場所編集 [1]=タイムスケジュール編集
+        cut.FindAll("button.iyk-btn-text")[1].Click();
         cut.FindAll("input[type=time]")[0].Input("10:00:00");
         cut.Find("button.iyk-btn-primary").Click();
 
@@ -194,7 +325,7 @@ public class PracticeDetailTests : BunitContext
 
         var cut = Render();
         var editButtons = cut.FindAll("button.iyk-btn-text");
-        editButtons[1].Click(); // タイムスケジュール分の次(演奏予定曲の編集)
+        editButtons[2].Click(); // [0]=場所編集 [1]=タイムスケジュール編集 の次(演奏予定曲の編集)
         cut.Find("input[type=checkbox]").Change(true);
         cut.Find("button.iyk-btn-primary").Click();
 
@@ -210,7 +341,7 @@ public class PracticeDetailTests : BunitContext
 
         var cut = Render();
         var editButtons = cut.FindAll("button.iyk-btn-text");
-        editButtons[1].Click();
+        editButtons[2].Click(); // [0]=場所編集 [1]=タイムスケジュール編集 の次(演奏予定曲の編集)
         cut.Find("input[type=checkbox]").Change(true);
         var callsAfterLoad = client.Calls.Count;
         cut.Find("button.iyk-btn-primary").Click();
@@ -231,8 +362,8 @@ public class PracticeDetailTests : BunitContext
             .ReturnsAsync("https://example.com/rec");
 
         var cut = Render();
-        // [0]=タイムスケジュール編集 [1]=演奏予定曲編集 [2]=＋ 録音を追加(録音未登録のため他のボタンは無い)
-        cut.FindAll("button.iyk-btn-text")[2].Click();
+        // [0]=場所編集 [1]=タイムスケジュール編集 [2]=演奏予定曲編集 [3]=＋ 録音を追加(録音未登録のため他のボタンは無い)
+        cut.FindAll("button.iyk-btn-text")[3].Click();
 
         Assert.Contains("録音を聴く", cut.Markup);
         Assert.Contains("★ 注目に設定", cut.Markup);
@@ -251,7 +382,7 @@ public class PracticeDetailTests : BunitContext
             .ReturnsAsync("https://example.com/rec");
 
         var cut = Render();
-        cut.FindAll("button.iyk-btn-text")[2].Click();
+        cut.FindAll("button.iyk-btn-text")[3].Click();
 
         Assert.Contains("本番前通し", cut.Markup);
         Assert.DoesNotContain("録音を聴く", cut.Markup);
@@ -271,7 +402,7 @@ public class PracticeDetailTests : BunitContext
 
         var cut = Render();
         var callsAfterLoad = client.Calls.Count;
-        cut.FindAll("button.iyk-btn-text")[2].Click();
+        cut.FindAll("button.iyk-btn-text")[3].Click();
 
         Assert.Equal(callsAfterLoad, client.Calls.Count);
     }
@@ -289,7 +420,7 @@ public class PracticeDetailTests : BunitContext
             .ReturnsAsync("不正なリンク");
 
         var cut = Render();
-        cut.FindAll("button.iyk-btn-text")[2].Click();
+        cut.FindAll("button.iyk-btn-text")[3].Click();
 
         Assert.Contains("リンクの形式が正しくありません", cut.Find("p.error-text").TextContent);
     }
@@ -307,8 +438,8 @@ public class PracticeDetailTests : BunitContext
             .ReturnsAsync("https://example.com/rec2");
 
         var cut = Render();
-        // [0]=タイムスケジュール編集 [1]=演奏予定曲編集 [2]=★注目に設定 [3]=編集 [4]=＋録音を追加
-        cut.FindAll("button.iyk-btn-text")[4].Click();
+        // [0]=場所編集 [1]=タイムスケジュール編集 [2]=演奏予定曲編集 [3]=★注目に設定 [4]=編集 [5]=＋録音を追加
+        cut.FindAll("button.iyk-btn-text")[5].Click();
 
         var links = cut.FindAll("a").Where(a => a.TextContent.Contains("録音を聴く")).ToList();
         Assert.Equal(2, links.Count);
@@ -326,8 +457,8 @@ public class PracticeDetailTests : BunitContext
         var cut = Render();
         Assert.Contains("★ 注目に設定", cut.Markup);
 
-        // [0]=タイムスケジュール編集 [1]=演奏予定曲編集 [2]=★ 注目に設定
-        cut.FindAll("button.iyk-btn-text")[2].Click();
+        // [0]=場所編集 [1]=タイムスケジュール編集 [2]=演奏予定曲編集 [3]=★ 注目に設定
+        cut.FindAll("button.iyk-btn-text")[3].Click();
 
         Assert.Contains("★ 注目解除", cut.Markup);
         Assert.DoesNotContain("★ 注目に設定", cut.Markup);
@@ -362,7 +493,7 @@ public class PracticeDetailTests : BunitContext
 
         var cut = Render();
         var callsAfterLoad = client.Calls.Count;
-        cut.FindAll("button.iyk-btn-text")[2].Click();
+        cut.FindAll("button.iyk-btn-text")[3].Click();
 
         Assert.Equal(callsAfterLoad, client.Calls.Count);
     }
@@ -381,8 +512,8 @@ public class PracticeDetailTests : BunitContext
         js.Setup(j => j.InvokeAsync<string?>("prompt", It.IsAny<object?[]>())).ReturnsAsync("");
 
         var cut = Render();
-        // [0]=タイムスケジュール編集 [1]=演奏予定曲編集 [2]=1件目★注目に設定 [3]=1件目編集 [4]=2件目★注目に設定 [5]=2件目編集 [6]=＋録音を追加
-        cut.FindAll("button.iyk-btn-text")[3].Click();
+        // [0]=場所編集 [1]=タイムスケジュール編集 [2]=演奏予定曲編集 [3]=1件目★注目に設定 [4]=1件目編集 [5]=2件目★注目に設定 [6]=2件目編集 [7]=＋録音を追加
+        cut.FindAll("button.iyk-btn-text")[4].Click();
 
         var links = cut.FindAll("a").Where(a => a.TextContent.Contains("録音を聴く")).ToList();
         Assert.Single(links);
@@ -489,7 +620,8 @@ public class PracticeDetailTests : BunitContext
         client.FailNextCall("Upsert", "practices");
 
         var cut = Render();
-        cut.Find("button.iyk-btn-text").Click();
+        // [0]=場所編集 [1]=タイムスケジュール編集
+        cut.FindAll("button.iyk-btn-text")[1].Click();
         cut.FindAll("input[type=time]")[0].Input("10:00:00");
         cut.FindAll("input[type=time]")[1].Input("12:00:00");
         cut.Find("button.iyk-btn-primary").Click();
@@ -507,7 +639,7 @@ public class PracticeDetailTests : BunitContext
 
         var cut = Render();
         var editButtons = cut.FindAll("button.iyk-btn-text");
-        editButtons[1].Click();
+        editButtons[2].Click(); // [0]=場所編集 [1]=タイムスケジュール編集 の次(演奏予定曲の編集)
         cut.Find("input[type=checkbox]").Change(true);
         cut.Find("button.iyk-btn-primary").Click();
 
@@ -526,7 +658,7 @@ public class PracticeDetailTests : BunitContext
         client.FailNextCall("Upsert", "practices");
 
         var cut = Render();
-        cut.FindAll("button.iyk-btn-text")[2].Click();
+        cut.FindAll("button.iyk-btn-text")[3].Click();
 
         Assert.Contains("録音リンクの保存に失敗しました", cut.Find("p.error-text").TextContent);
     }
@@ -542,7 +674,7 @@ public class PracticeDetailTests : BunitContext
         client.FailNextCall("Upsert", "practices");
 
         var cut = Render();
-        cut.FindAll("button.iyk-btn-text")[2].Click();
+        cut.FindAll("button.iyk-btn-text")[3].Click();
 
         Assert.Contains("更新に失敗しました", cut.Find("p.error-text").TextContent);
     }
@@ -599,7 +731,8 @@ public class PracticeDetailTests : BunitContext
         client.Seed("practices", "p1", Seed.Practice(DateTime.Today.AddDays(3)));
 
         var cut = Render();
-        cut.Find("button.iyk-btn-text").Click();
+        // [0]=場所編集 [1]=タイムスケジュール編集
+        cut.FindAll("button.iyk-btn-text")[1].Click();
         cut.Find("button.iyk-btn-block").Click();
         cut.Find("button.iyk-btn-block").Click();
 
@@ -621,7 +754,7 @@ public class PracticeDetailTests : BunitContext
         client.Seed("pieces", "pc1", Seed.Piece("曲A"));
 
         var cut = Render();
-        cut.FindAll("button.iyk-btn-text")[1].Click();
+        cut.FindAll("button.iyk-btn-text")[2].Click(); // [0]=場所編集 [1]=タイムスケジュール編集 の次(演奏予定曲の編集)
 
         Assert.True(cut.Find("input[type=checkbox]").HasAttribute("checked"));
     }
