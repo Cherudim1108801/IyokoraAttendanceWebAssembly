@@ -94,4 +94,14 @@ public class PracticeServiceTests
 
         repository.Verify(r => r.SetKeyPickedUpAsync("practice1", false, null, It.IsAny<CancellationToken>()), Times.Once);
     }
+
+    [Fact]
+    public async Task 練習場所を更新すると指定した値と鍵の受け取り要否がそのままリポジトリへ渡される()
+    {
+        var (service, repository) = CreateService();
+
+        await service.UpdatePlaceAsync("practice1", "市民会館", requiresKeyPickup: true);
+
+        repository.Verify(r => r.UpdatePlaceAsync("practice1", "市民会館", true, It.IsAny<CancellationToken>()), Times.Once);
+    }
 }

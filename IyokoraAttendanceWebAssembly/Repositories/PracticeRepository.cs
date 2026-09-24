@@ -69,6 +69,18 @@ public class PracticeRepository(IFirestoreClient client) : IPracticeRepository
         return client.UpsertDocumentAsync(Collection, practiceId, fields, ct);
     }
 
+    public Task UpdatePlaceAsync(string practiceId, string place, bool requiresKeyPickup, CancellationToken ct = default)
+    {
+        var fields = new Dictionary<string, object?>
+        {
+            ["place"] = place,
+            ["requiresKeyPickup"] = requiresKeyPickup,
+            ["keyPickedUp"] = false,
+            ["keyPickedUpByName"] = null
+        };
+        return client.UpsertDocumentAsync(Collection, practiceId, fields, ct);
+    }
+
     public Task DeleteAsync(string practiceId, CancellationToken ct = default) =>
         client.DeleteDocumentAsync(Collection, practiceId, ct);
 
