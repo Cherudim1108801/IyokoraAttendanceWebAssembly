@@ -26,14 +26,14 @@ public class MainLayoutTests : BunitContext
     private static RenderFragment EmptyBody => builder => builder.AddContent(0, "本文");
 
     [Fact]
-    public void 未登録端末でトップページにアクセスするとオンボーディングへリダイレクトされる()
+    public void 未登録端末でトップページにアクセスするとログイン画面へリダイレクトされる()
     {
         RegisterProfile(isRegistered: false);
 
         var cut = Render<MainLayout>(p => p.Add(x => x.Body, EmptyBody));
 
         var nav = Services.GetRequiredService<NavigationManager>();
-        Assert.EndsWith("onboarding", nav.Uri);
+        Assert.EndsWith("login", nav.Uri);
         Assert.Empty(cut.FindAll("button.hamburger-button"));
     }
 
